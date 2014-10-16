@@ -1,13 +1,8 @@
 package main
 
 import (
-	"fmt"
-	"io"
-	"io/ioutil"
 	"net"
 	"os"
-	"os/user"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -43,59 +38,6 @@ var (
 	}
 )
 
-type command struct {
-	User     string
-	Args     []string
-	Identity string
-}
-
-func (c command) cmd() string {
-	return strings.Join(c.Args, " ")
-}
-
-func (c command) config() (*ssh.ClientConfig, error) {
-	u, err := user.Current()
-	if err != nil {
-		return nil, err
-	}
-	contents, err := ioutil.ReadFile(filepath.Join(u.HomeDir, ".ssh", c.Identity))
-	if err != nil {
-		return nil, err
-	}
-	signer, err := ssh.ParsePrivateKey(contents)
-	if err != nil {
-		return nil, err
-	}
-	return &ssh.ClientConfig{
-		User: c.User,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(signer),
-		},
-	}, nil
-}
-
-func (c command) String() string {
-	return fmt.Sprintf("user: %s command: %v", c.User, c.Args)
-}
-
-func newNameWriter(name string, w io.Writer) io.Writer {
-	return &nameWriter{
-		name: name,
-		w:    w,
-	}
-}
-
-type nameWriter struct {
-	name string
-	w    io.Writer
-}
-
-func (n *nameWriter) Write(p []byte) (int, error) {
-	l := len(p)
-	_, err := fmt.Fprintf(n.w, "[%s] %s", n.name, p)
-	return l, err
-}
-
 // preload initializes any global options and configuration
 // before the main or sub commands are run
 func preload(context *cli.Context) error {
@@ -108,7 +50,7 @@ func preload(context *cli.Context) error {
 // multiplexAction uses the arguments passed via the command line and
 // multiplexes them across multiple SSH connections
 func multiplexAction(context *cli.Context) {
-	c, err := createCommand(context)
+	c, err := newCommand(context)
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -132,18 +74,6 @@ func multiplexAction(context *cli.Context) {
 	logger.Debugf("finished executing %s on all hosts", c)
 }
 
-func createCommand(context *cli.Context) (c command, err error) {
-	args := []string(context.Args())
-	if len(args) == 0 {
-		return c, fmt.Errorf("no command specified to execute")
-	}
-	return command{
-		User:     context.GlobalString("user"),
-		Args:     args,
-		Identity: context.GlobalString("identity"),
-	}, nil
-}
-
 func executeCommand(c command, host string, group *sync.WaitGroup) {
 	defer group.Done()
 	var (
@@ -163,6 +93,7 @@ func executeCommand(c command, host string, group *sync.WaitGroup) {
 	logger.Debugf("host %s executed successfully", host)
 }
 
+// runSSH executes the given command on the given host
 func runSSH(c command, host string) error {
 	config, err := c.config()
 	if err != nil {
@@ -188,6 +119,8 @@ func runSSH(c command, host string) error {
 	return session.Run(c.cmd())
 }
 
+// cleanHost parses out the hostname/ip and port.  If no port is
+// specified then port 22 is appended to the hostname/ip
 func cleanHost(host string) (string, error) {
 	h, port, err := net.SplitHostPort(host)
 	if err != nil {
