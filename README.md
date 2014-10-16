@@ -46,4 +46,11 @@ slex --host 192.168.1.3 --host 192.168.1.4 docker run --rm busybox echo "hi slex
 [192.168.1.4:22] hi slex
 ```
 
+### Pipe scripts to all servers
+```bash
+echo "echo hi again" | slex --host 192.168.1.3 --host 192.168.1.4
+[192.168.1.3:22] hi again
+[192.168.1.4:22] hi again
+```
+
 #### License - MIT

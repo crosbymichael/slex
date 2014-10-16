@@ -54,7 +54,7 @@ func multiplexAction(context *cli.Context) {
 	if err != nil {
 		logger.Fatal(err)
 	}
-	logger.Debugf("command %s", c)
+	logger.Debug(c)
 
 	hosts := []string(context.GlobalStringSlice("host"))
 	if len(hosts) == 0 {
@@ -65,7 +65,6 @@ func multiplexAction(context *cli.Context) {
 	group := &sync.WaitGroup{}
 	for _, h := range hosts {
 		group.Add(1)
-
 		go executeCommand(c, h, group)
 	}
 
@@ -116,7 +115,7 @@ func runSSH(c command, host string) error {
 	session.Stderr = newNameWriter(host, os.Stderr)
 	session.Stdout = newNameWriter(host, os.Stdout)
 
-	return session.Run(c.cmd())
+	return session.Run(c.Cmd)
 }
 
 // cleanHost parses out the hostname/ip and port.  If no port is

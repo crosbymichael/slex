@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -14,13 +15,28 @@ import (
 
 // newCommand returns a command populated from the context
 func newCommand(context *cli.Context) (c command, err error) {
-	args := []string(context.Args())
-	if len(args) == 0 {
-		return c, fmt.Errorf("no command specified to execute")
+	var (
+		cmd  string
+		args = []string(context.Args())
+	)
+
+	switch len(args) {
+	default:
+		cmd = strings.Join(args, " ")
+	case 0:
+		raw, err := ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			return c, err
+		}
+		cmd = string(raw)
+	}
+
+	if cmd == "" {
+		return c, fmt.Errorf("no command specified")
 	}
 	return command{
+		Cmd:      cmd,
 		User:     context.GlobalString("user"),
-		Args:     args,
 		Identity: context.GlobalString("identity"),
 	}, nil
 }
@@ -30,17 +46,12 @@ type command struct {
 	// User is the user to run the command as
 	User string
 
-	// Args are the CLI arguments to execute
-	Args []string
+	// Cmd is the pared command string that will be executed
+	Cmd string
 
 	// Identity is the SSH key to identify as which is commonly
 	// the private keypair i.e. id_rsa
 	Identity string
-}
-
-// cmd returns the command's args joined by " "
-func (c command) cmd() string {
-	return strings.Join(c.Args, " ")
 }
 
 // config returns the SSH client config for the connection
@@ -72,5 +83,5 @@ func (c command) loadIdentity() ([]byte, error) {
 
 // String returns a pretty printed string of the command
 func (c command) String() string {
-	return fmt.Sprintf("user: %s command: %v", c.User, c.Args)
+	return fmt.Sprintf("user: %s command: %s", c.User, c.Cmd)
 }
