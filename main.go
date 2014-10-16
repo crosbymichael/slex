@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -77,6 +78,24 @@ func (c command) String() string {
 	return fmt.Sprintf("user: %s command: %v", c.User, c.Args)
 }
 
+func newNameWriter(name string, w io.Writer) io.Writer {
+	return &nameWriter{
+		name: name,
+		w:    w,
+	}
+}
+
+type nameWriter struct {
+	name string
+	w    io.Writer
+}
+
+func (n *nameWriter) Write(p []byte) (int, error) {
+	l := len(p)
+	_, err := fmt.Fprintf(n.w, "[%s] %s", n.name, p)
+	return l, err
+}
+
 // preload initializes any global options and configuration
 // before the main or sub commands are run
 func preload(context *cli.Context) error {
@@ -101,8 +120,6 @@ func multiplexAction(context *cli.Context) {
 	}
 	logger.Debugf("hosts %v", hosts)
 
-	logger.Infof("executing command on %d hosts", len(hosts))
-
 	group := &sync.WaitGroup{}
 	for _, h := range hosts {
 		group.Add(1)
@@ -111,7 +128,8 @@ func multiplexAction(context *cli.Context) {
 	}
 
 	group.Wait()
-	logger.Infof("finished executing %s on all hosts", c)
+
+	logger.Debugf("finished executing %s on all hosts", c)
 }
 
 func createCommand(context *cli.Context) (c command, err error) {
@@ -142,7 +160,7 @@ func executeCommand(c command, host string, group *sync.WaitGroup) {
 		logger.WithField("host", host).Error(err)
 		return
 	}
-	logger.Infof("host %s executed successfully", host)
+	logger.Debugf("host %s executed successfully", host)
 }
 
 func runSSH(c command, host string) error {
@@ -164,8 +182,8 @@ func runSSH(c command, host string) error {
 
 	// TODO: find a better way to multiplex all the streams
 	// and support STDIN without sending to all sessions
-	session.Stderr = os.Stderr
-	session.Stdout = os.Stdout
+	session.Stderr = newNameWriter(host, os.Stderr)
+	session.Stdout = newNameWriter(host, os.Stdout)
 
 	return session.Run(c.cmd())
 }
