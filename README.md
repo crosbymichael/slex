@@ -6,6 +6,32 @@ have python installed on your system and you don't *have* to write a script or
 configuration files if you do not want to.
 
 
+```bash
+slex -h
+NAME:
+   slex - SSH commands multiplexed
+
+USAGE:
+   slex [global options] command [command options] [arguments...]
+
+VERSION:
+   1
+
+AUTHOR:
+  @crosbymichael - <crosbymichael@gmail.com>
+
+COMMANDS:
+   help, h      Shows a list of commands or help for one command
+
+GLOBAL OPTIONS:
+   --debug                              enable debug output for the logs
+   --host '--host option --host option' SSH host address
+   --user, -u 'root'                    user to execute the command as
+   --identity, -i 'id_rsa'              SSH identity to use for connecting to the host
+   --help, -h                           show help
+   --version, -v                        print the version
+```
+
 ### Get the uptime for all servers
 ```bash
 slex --host 192.168.1.3 --host 192.168.1.4 uptime
@@ -16,8 +42,8 @@ slex --host 192.168.1.3 --host 192.168.1.4 uptime
 ### Run a docker container on all servers
 ```bash
 slex --host 192.168.1.3 --host 192.168.1.4 docker run --rm busybox echo "hi slex"
-[104.131.131.110:22]  hi slex
-[198.199.103.188:22]  hi slex
+[192.168.1.3:22] hi slex
+[192.168.1.4:22] hi slex
 ```
 
 #### License - MIT
