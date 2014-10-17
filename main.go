@@ -6,8 +6,6 @@ import (
 	"strings"
 	"sync"
 
-	"code.google.com/p/go.crypto/ssh"
-
 	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 )
@@ -34,6 +32,10 @@ var (
 			Name:  "identity,i",
 			Value: "id_rsa",
 			Usage: "SSH identity to use for connecting to the host",
+		},
+		cli.BoolFlag{
+			Name:  "agent,A",
+			Usage: "Forward authentication request to the ssh agent",
 		},
 	}
 )
@@ -62,10 +64,12 @@ func multiplexAction(context *cli.Context) {
 	}
 	logger.Debugf("hosts %v", hosts)
 
+	af := context.GlobalBool("A")
+
 	group := &sync.WaitGroup{}
 	for _, h := range hosts {
 		group.Add(1)
-		go executeCommand(c, h, group)
+		go executeCommand(c, h, af, group)
 	}
 
 	group.Wait()
@@ -73,7 +77,7 @@ func multiplexAction(context *cli.Context) {
 	logger.Debugf("finished executing %s on all hosts", c)
 }
 
-func executeCommand(c command, host string, group *sync.WaitGroup) {
+func executeCommand(c command, host string, agentForwarding bool, group *sync.WaitGroup) {
 	defer group.Done()
 	var (
 		err          error
@@ -85,7 +89,7 @@ func executeCommand(c command, host string, group *sync.WaitGroup) {
 		return
 	}
 
-	if err = runSSH(c, host); err != nil {
+	if err = runSSH(c, host, agentForwarding); err != nil {
 		logger.WithField("host", host).Error(err)
 		return
 	}
@@ -93,18 +97,12 @@ func executeCommand(c command, host string, group *sync.WaitGroup) {
 }
 
 // runSSH executes the given command on the given host
-func runSSH(c command, host string) error {
-	config, err := c.config()
+func runSSH(c command, host string, agentForwarding bool) error {
+	config, err := newSshClientConfig(c.Identity, agentForwarding)
 	if err != nil {
 		return err
 	}
-	conn, err := ssh.Dial("tcp", host, config)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	session, err := conn.NewSession()
+	session, err := config.NewSession(host)
 	if err != nil {
 		return err
 	}

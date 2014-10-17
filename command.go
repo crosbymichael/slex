@@ -4,13 +4,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/user"
-	"path/filepath"
+
 	"strings"
 
 	"github.com/codegangsta/cli"
-
-	"code.google.com/p/go.crypto/ssh"
 )
 
 // newCommand returns a command populated from the context
@@ -52,33 +49,6 @@ type command struct {
 	// Identity is the SSH key to identify as which is commonly
 	// the private keypair i.e. id_rsa
 	Identity string
-}
-
-// config returns the SSH client config for the connection
-func (c command) config() (*ssh.ClientConfig, error) {
-	contents, err := c.loadIdentity()
-	if err != nil {
-		return nil, err
-	}
-	signer, err := ssh.ParsePrivateKey(contents)
-	if err != nil {
-		return nil, err
-	}
-	return &ssh.ClientConfig{
-		User: c.User,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(signer),
-		},
-	}, nil
-}
-
-// loadIdentity returns the private key file's contents
-func (c command) loadIdentity() ([]byte, error) {
-	u, err := user.Current()
-	if err != nil {
-		return nil, err
-	}
-	return ioutil.ReadFile(filepath.Join(u.HomeDir, ".ssh", c.Identity))
 }
 
 // String returns a pretty printed string of the command
