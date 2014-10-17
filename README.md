@@ -28,6 +28,7 @@ GLOBAL OPTIONS:
    --host '--host option --host option' SSH host address
    --user, -u 'root'                    user to execute the command as
    --identity, -i 'id_rsa'              SSH identity to use for connecting to the host
+   --agent, -A                          use ssh agent forwarding for authentication, rather than identity
    --help, -h                           show help
    --version, -v                        print the version
 ```
