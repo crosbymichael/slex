@@ -12,6 +12,20 @@ import (
 	"code.google.com/p/go.crypto/ssh/agent"
 )
 
+// sshSession stores the open session and connection to execute a command.
+type sshSession struct {
+	// conn is the ssh client that started the session.
+	conn *ssh.Client
+
+	*ssh.Session
+}
+
+// Close closses the open ssh session and connection.
+func (s *sshSession) Close() {
+	s.Session.Close()
+	s.conn.Close()
+}
+
 // sshClientConfig stores the configuration
 // and the ssh agent to forward authentication requests
 type sshClientConfig struct {
@@ -31,6 +45,7 @@ func newSshClientConfig(userName, identity string, agentForwarding bool) (*sshCl
 	return newSshDefaultConfig(userName, identity)
 }
 
+// newSshAgentConfig initializes the configuration to talk with an ssh agent.
 func newSshAgentConfig(userName string) (*sshClientConfig, error) {
 	agent, err := newAgent()
 	if err != nil {
@@ -48,6 +63,7 @@ func newSshAgentConfig(userName string) (*sshClientConfig, error) {
 	}, nil
 }
 
+// newSshDefaultConfig initializes the configuration to use an ideitity file.
 func newSshDefaultConfig(userName, identity string) (*sshClientConfig, error) {
 	config, err := sshDefaultConfig(userName, identity)
 	if err != nil {
@@ -59,12 +75,11 @@ func newSshDefaultConfig(userName, identity string) (*sshClientConfig, error) {
 
 // NewSession creates a new ssh session with the host.
 // It forwards authentication to the agent when it's configured.
-func (s *sshClientConfig) NewSession(host string) (*ssh.Session, error) {
+func (s *sshClientConfig) NewSession(host string) (*sshSession, error) {
 	conn, err := ssh.Dial("tcp", host, s.ClientConfig)
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
 
 	if s.agent != nil {
 		if err := agent.ForwardToAgent(conn, s.agent); err != nil {
@@ -77,7 +92,10 @@ func (s *sshClientConfig) NewSession(host string) (*ssh.Session, error) {
 		err = agent.RequestAgentForwarding(session)
 	}
 
-	return session, err
+	return &sshSession{
+		conn:    conn,
+		Session: session,
+	}, err
 }
 
 // newAgent connects with the SSH agent in the to forward authentication requests.
@@ -95,6 +113,8 @@ func newAgent() (agent.Agent, error) {
 	return agent.NewClient(conn), nil
 }
 
+// sshAgentConfig creates a new configuration for the ssh client
+// with the signatures from the ssh agent.
 func sshAgentConfig(userName string, a agent.Agent) (*ssh.ClientConfig, error) {
 	signers, err := a.Signers()
 	if err != nil {
