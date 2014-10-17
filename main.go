@@ -98,7 +98,7 @@ func executeCommand(c command, host string, agentForwarding bool, group *sync.Wa
 
 // runSSH executes the given command on the given host
 func runSSH(c command, host string, agentForwarding bool) error {
-	config, err := newSshClientConfig(c.Identity, agentForwarding)
+	config, err := newSshClientConfig(c.User, c.Identity, agentForwarding)
 	if err != nil {
 		return err
 	}

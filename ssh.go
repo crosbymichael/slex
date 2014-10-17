@@ -23,26 +23,21 @@ type sshClientConfig struct {
 
 // newSshClientConfig initializes the ssh configuration.
 // It connects with the ssh agent when agent forwarding is enabled.
-func newSshClientConfig(identity string, agentForwarding bool) (*sshClientConfig, error) {
-	u, err := user.Current()
-	if err != nil {
-		return nil, err
-	}
-
+func newSshClientConfig(userName, identity string, agentForwarding bool) (*sshClientConfig, error) {
 	if agentForwarding {
-		return newSshAgentConfig(u)
+		return newSshAgentConfig(userName)
 	}
 
-	return newSshDefaultConfig(u, identity)
+	return newSshDefaultConfig(userName, identity)
 }
 
-func newSshAgentConfig(u *user.User) (*sshClientConfig, error) {
+func newSshAgentConfig(userName string) (*sshClientConfig, error) {
 	agent, err := newAgent()
 	if err != nil {
 		return nil, err
 	}
 
-	config, err := sshAgentConfig(u, agent)
+	config, err := sshAgentConfig(userName, agent)
 	if err != nil {
 		return nil, err
 	}
@@ -53,8 +48,8 @@ func newSshAgentConfig(u *user.User) (*sshClientConfig, error) {
 	}, nil
 }
 
-func newSshDefaultConfig(u *user.User, identity string) (*sshClientConfig, error) {
-	config, err := sshDefaultConfig(u, identity)
+func newSshDefaultConfig(userName, identity string) (*sshClientConfig, error) {
+	config, err := sshDefaultConfig(userName, identity)
 	if err != nil {
 		return nil, err
 	}
@@ -100,14 +95,14 @@ func newAgent() (agent.Agent, error) {
 	return agent.NewClient(conn), nil
 }
 
-func sshAgentConfig(u *user.User, a agent.Agent) (*ssh.ClientConfig, error) {
+func sshAgentConfig(userName string, a agent.Agent) (*ssh.ClientConfig, error) {
 	signers, err := a.Signers()
 	if err != nil {
 		return nil, err
 	}
 
 	return &ssh.ClientConfig{
-		User: u.Username,
+		User: userName,
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signers...),
 		},
@@ -115,8 +110,8 @@ func sshAgentConfig(u *user.User, a agent.Agent) (*ssh.ClientConfig, error) {
 }
 
 // sshDefaultConfig returns the SSH client config for the connection
-func sshDefaultConfig(u *user.User, identity string) (*ssh.ClientConfig, error) {
-	contents, err := loadDefaultIdentity(u, identity)
+func sshDefaultConfig(userName, identity string) (*ssh.ClientConfig, error) {
+	contents, err := loadDefaultIdentity(userName, identity)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +121,7 @@ func sshDefaultConfig(u *user.User, identity string) (*ssh.ClientConfig, error) 
 	}
 
 	return &ssh.ClientConfig{
-		User: u.Username,
+		User: userName,
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
 		},
@@ -134,6 +129,11 @@ func sshDefaultConfig(u *user.User, identity string) (*ssh.ClientConfig, error) 
 }
 
 // loadDefaultIdentity returns the private key file's contents
-func loadDefaultIdentity(u *user.User, identity string) ([]byte, error) {
+func loadDefaultIdentity(userName, identity string) ([]byte, error) {
+	u, err := user.Current()
+	if err != nil {
+		return nil, err
+	}
+
 	return ioutil.ReadFile(filepath.Join(u.HomeDir, ".ssh", identity))
 }
