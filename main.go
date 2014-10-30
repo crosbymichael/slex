@@ -37,6 +37,11 @@ var (
 			Name:  "agent,A",
 			Usage: "Forward authentication request to the ssh agent",
 		},
+		cli.StringSliceFlag{
+			Name:  "env,e",
+			Usage: "set environment variables for SSH command",
+			Value: &cli.StringSlice{},
+		},
 	}
 )
 
@@ -112,7 +117,11 @@ func runSSH(c command, host string, agentForwarding bool) error {
 	// and support STDIN without sending to all sessions
 	session.Stderr = newNameWriter(host, os.Stderr)
 	session.Stdout = newNameWriter(host, os.Stdout)
-
+	for key, value := range c.Env {
+		if err := session.Setenv(key, value); err != nil {
+			return err
+		}
+	}
 	return session.Run(c.Cmd)
 }
 
