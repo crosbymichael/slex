@@ -8,8 +8,8 @@ import (
 	"os/user"
 	"path/filepath"
 
-	"code.google.com/p/go.crypto/ssh"
-	"code.google.com/p/go.crypto/ssh/agent"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 // sshSession stores the open session and connection to execute a command.
