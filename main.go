@@ -42,6 +42,10 @@ var (
 			Usage: "set environment variables for SSH command",
 			Value: &cli.StringSlice{},
 		},
+		cli.BoolFlag{
+			Name:  "quiet,q",
+			Usage: "disable output from the ssh command",
+		},
 	}
 )
 
@@ -68,21 +72,16 @@ func multiplexAction(context *cli.Context) {
 		logger.Fatal("no host specified for command to run")
 	}
 	logger.Debugf("hosts %v", hosts)
-
-	af := context.GlobalBool("A")
-
 	group := &sync.WaitGroup{}
 	for _, h := range hosts {
 		group.Add(1)
-		go executeCommand(c, h, af, group)
+		go executeCommand(c, h, context.GlobalBool("A"), context.GlobalBool("quiet"), group)
 	}
-
 	group.Wait()
-
 	logger.Debugf("finished executing %s on all hosts", c)
 }
 
-func executeCommand(c command, host string, agentForwarding bool, group *sync.WaitGroup) {
+func executeCommand(c command, host string, agentForwarding, quiet bool, group *sync.WaitGroup) {
 	defer group.Done()
 	var (
 		err          error
@@ -94,7 +93,7 @@ func executeCommand(c command, host string, agentForwarding bool, group *sync.Wa
 		return
 	}
 
-	if err = runSSH(c, host, agentForwarding); err != nil {
+	if err = runSSH(c, host, agentForwarding, quiet); err != nil {
 		logger.WithField("host", host).Error(err)
 		return
 	}
@@ -102,7 +101,7 @@ func executeCommand(c command, host string, agentForwarding bool, group *sync.Wa
 }
 
 // runSSH executes the given command on the given host
-func runSSH(c command, host string, agentForwarding bool) error {
+func runSSH(c command, host string, agentForwarding, quiet bool) error {
 	config, err := newSshClientConfig(c.User, c.Identity, agentForwarding)
 	if err != nil {
 		return err
@@ -115,8 +114,10 @@ func runSSH(c command, host string, agentForwarding bool) error {
 
 	// TODO: find a better way to multiplex all the streams
 	// and support STDIN without sending to all sessions
-	session.Stderr = newNameWriter(host, os.Stderr)
-	session.Stdout = newNameWriter(host, os.Stdout)
+	if !quiet {
+		session.Stderr = newNameWriter(host, os.Stderr)
+		session.Stdout = newNameWriter(host, os.Stdout)
+	}
 	for key, value := range c.Env {
 		if err := session.Setenv(key, value); err != nil {
 			return err
