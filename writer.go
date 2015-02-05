@@ -1,26 +1,28 @@
 package main
 
 import (
-	"fmt"
+	"bytes"
 	"io"
 )
 
-// newNameWriter returns an io.Writer that prepends the given name
-func newNameWriter(name string, w io.Writer) io.Writer {
-	return &nameWriter{
-		name: name,
-		w:    w,
+func newBufCloser(w io.Writer) io.WriteCloser {
+	return &bufCloser{
+		buffer: bytes.NewBuffer(nil),
+		w:      w,
 	}
 }
 
-// nameWriter prepends a name in [] to each write
-type nameWriter struct {
-	name string
-	w    io.Writer
+// bufCloser buffers all output that is written to it until it's closed.
+type bufCloser struct {
+	buffer *bytes.Buffer
+	w      io.Writer
 }
 
-func (n *nameWriter) Write(p []byte) (int, error) {
-	l := len(p)
-	_, err := fmt.Fprintf(n.w, "[%s] %s", n.name, p)
-	return l, err
+func (w *bufCloser) Write(p []byte) (int, error) {
+	return w.buffer.Write(p)
+}
+
+func (w *bufCloser) Close() error {
+	_, err := w.buffer.WriteTo(w.w)
+	return err
 }

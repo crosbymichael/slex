@@ -73,17 +73,14 @@ func executeCommand(c command, host string, agentForwarding, quiet bool, group *
 		err          error
 		originalHost = host
 	)
-
 	if host, err = cleanHost(host); err != nil {
 		log.WithField("host", originalHost).Error(err)
 		return
 	}
-
 	if err = runSSH(c, host, agentForwarding, quiet); err != nil {
 		log.WithField("host", host).Error(err)
 		return
 	}
-	log.Debugf("host %s executed successfully", host)
 }
 
 // runSSH executes the given command on the given host
@@ -96,14 +93,16 @@ func runSSH(c command, host string, agentForwarding, quiet bool) error {
 	if err != nil {
 		return err
 	}
-	defer session.Close()
-
-	// TODO: find a better way to multiplex all the streams
-	// and support STDIN without sending to all sessions
 	if !quiet {
-		session.Stderr = newNameWriter(host, os.Stderr)
-		session.Stdout = newNameWriter(host, os.Stdout)
+		w := newBufCloser(os.Stdout)
+		defer w.Close()
+		session.Stderr, session.Stdout = w, w
 	}
+	defer func() {
+		session.Close()
+		log.Printf("Session complete from %s", host)
+	}()
+
 	for key, value := range c.Env {
 		if err := session.Setenv(key, value); err != nil {
 			return err
