@@ -1,61 +1,44 @@
 package main
 
 import (
+	"bufio"
 	"net"
 	"os"
 	"strings"
 	"sync"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
-)
-
-var (
-	logger = logrus.New()
-
-	globalFlags = []cli.Flag{
-		cli.BoolFlag{
-			Name:  "debug",
-			Usage: "enable debug output for the logs",
-		},
-		cli.StringSliceFlag{
-			Name:  "host",
-			Value: &cli.StringSlice{},
-			Usage: "SSH host address",
-		},
-		cli.StringFlag{
-			Name:  "user,u",
-			Value: "root",
-			Usage: "user to execute the command as",
-		},
-		cli.StringFlag{
-			Name:  "identity,i",
-			Value: "id_rsa",
-			Usage: "SSH identity to use for connecting to the host",
-		},
-		cli.BoolFlag{
-			Name:  "agent,A",
-			Usage: "Forward authentication request to the ssh agent",
-		},
-		cli.StringSliceFlag{
-			Name:  "env,e",
-			Usage: "set environment variables for SSH command",
-			Value: &cli.StringSlice{},
-		},
-		cli.BoolFlag{
-			Name:  "quiet,q",
-			Usage: "disable output from the ssh command",
-		},
-	}
 )
 
 // preload initializes any global options and configuration
 // before the main or sub commands are run
 func preload(context *cli.Context) error {
 	if context.GlobalBool("debug") {
-		logger.Level = logrus.DebugLevel
+		log.SetLevel(log.DebugLevel)
 	}
 	return nil
+}
+
+// hostHosts returns a list of host addresses that are specified on the
+// command line and also in a hosts file separated by new lines.
+func loadHosts(context *cli.Context) ([]string, error) {
+	hosts := []string(context.GlobalStringSlice("host"))
+	if hostsFile := context.GlobalString("hosts"); hostsFile != "" {
+		f, err := os.Open(hostsFile)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		s := bufio.NewScanner(f)
+		for s.Scan() {
+			if err := s.Err(); err != nil {
+				return nil, err
+			}
+			hosts = append(hosts, s.Text())
+		}
+	}
+	return hosts, nil
 }
 
 // multiplexAction uses the arguments passed via the command line and
@@ -63,22 +46,25 @@ func preload(context *cli.Context) error {
 func multiplexAction(context *cli.Context) {
 	c, err := newCommand(context)
 	if err != nil {
-		logger.Fatal(err)
+		log.Fatal(err)
 	}
-	logger.Debug(c)
+	log.Debug(c)
 
-	hosts := []string(context.GlobalStringSlice("host"))
-	if len(hosts) == 0 {
-		logger.Fatal("no host specified for command to run")
+	hosts, err := loadHosts(context)
+	if err != nil {
+		log.Fatal(err)
 	}
-	logger.Debugf("hosts %v", hosts)
+	if len(hosts) == 0 {
+		log.Fatal("no host specified for command to run")
+	}
+	log.Debugf("hosts %v", hosts)
 	group := &sync.WaitGroup{}
 	for _, h := range hosts {
 		group.Add(1)
 		go executeCommand(c, h, context.GlobalBool("A"), context.GlobalBool("quiet"), group)
 	}
 	group.Wait()
-	logger.Debugf("finished executing %s on all hosts", c)
+	log.Debugf("finished executing %s on all hosts", c)
 }
 
 func executeCommand(c command, host string, agentForwarding, quiet bool, group *sync.WaitGroup) {
@@ -89,15 +75,15 @@ func executeCommand(c command, host string, agentForwarding, quiet bool, group *
 	)
 
 	if host, err = cleanHost(host); err != nil {
-		logger.WithField("host", originalHost).Error(err)
+		log.WithField("host", originalHost).Error(err)
 		return
 	}
 
 	if err = runSSH(c, host, agentForwarding, quiet); err != nil {
-		logger.WithField("host", host).Error(err)
+		log.WithField("host", host).Error(err)
 		return
 	}
-	logger.Debugf("host %s executed successfully", host)
+	log.Debugf("host %s executed successfully", host)
 }
 
 // runSSH executes the given command on the given host
@@ -150,12 +136,47 @@ func main() {
 	app.Version = "1"
 	app.Author = "@crosbymichael"
 	app.Email = "crosbymichael@gmail.com"
-
 	app.Before = preload
-	app.Flags = globalFlags
+	app.Flags = []cli.Flag{
+		cli.BoolFlag{
+			Name:  "debug",
+			Usage: "enable debug output for the logs",
+		},
+		cli.StringSliceFlag{
+			Name:  "host",
+			Value: &cli.StringSlice{},
+			Usage: "SSH host address",
+		},
+		cli.StringFlag{
+			Name:  "hosts",
+			Usage: "file containing host addresses separated by a new line",
+		},
+		cli.StringFlag{
+			Name:  "user,u",
+			Value: "root",
+			Usage: "user to execute the command as",
+		},
+		cli.StringFlag{
+			Name:  "identity,i",
+			Value: "id_rsa",
+			Usage: "SSH identity to use for connecting to the host",
+		},
+		cli.BoolFlag{
+			Name:  "agent,A",
+			Usage: "Forward authentication request to the ssh agent",
+		},
+		cli.StringSliceFlag{
+			Name:  "env,e",
+			Usage: "set environment variables for SSH command",
+			Value: &cli.StringSlice{},
+		},
+		cli.BoolFlag{
+			Name:  "quiet,q",
+			Usage: "disable output from the ssh command",
+		},
+	}
 	app.Action = multiplexAction
-
 	if err := app.Run(os.Args); err != nil {
-		logger.Fatal(err)
+		log.Fatal(err)
 	}
 }
