@@ -85,11 +85,12 @@ func executeCommand(c command, host string, agentForwarding, quiet bool, group *
 
 // runSSH executes the given command on the given host
 func runSSH(c command, host string, agentForwarding, quiet bool) error {
-	config, err := newSshClientConfig(c.User, c.Identity, agentForwarding)
+	config, err := newSshClientConfig(host, c.User, c.Identity, agentForwarding)
 	if err != nil {
 		return err
 	}
-	session, err := config.NewSession(host)
+
+	session, err := config.NewSession(config.host)
 	if err != nil {
 		return err
 	}
