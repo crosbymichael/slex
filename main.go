@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -54,6 +55,12 @@ func multiplexAction(context *cli.Context) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	sections, err := parseSshConfigFile(filepath.Join(os.Getenv("HOME"), ".ssh", "config"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	if len(hosts) == 0 {
 		log.Fatal("no host specified for command to run")
 	}
@@ -61,13 +68,13 @@ func multiplexAction(context *cli.Context) {
 	group := &sync.WaitGroup{}
 	for _, h := range hosts {
 		group.Add(1)
-		go executeCommand(c, h, context.GlobalBool("A"), context.GlobalBool("quiet"), group)
+		go executeCommand(c, h, sections[h], context.GlobalBool("A"), context.GlobalBool("quiet"), group)
 	}
 	group.Wait()
 	log.Debugf("finished executing %s on all hosts", c)
 }
 
-func executeCommand(c command, host string, agentForwarding, quiet bool, group *sync.WaitGroup) {
+func executeCommand(c command, host string, section *SshConfigFileSection, agentForwarding, quiet bool, group *sync.WaitGroup) {
 	defer group.Done()
 	var (
 		err          error
@@ -77,19 +84,21 @@ func executeCommand(c command, host string, agentForwarding, quiet bool, group *
 		log.WithField("host", originalHost).Error(err)
 		return
 	}
-	if err = runSSH(c, host, agentForwarding, quiet); err != nil {
+
+	if err = runSSH(c, host, section, agentForwarding, quiet); err != nil {
 		log.WithField("host", host).Error(err)
 		return
 	}
 }
 
 // runSSH executes the given command on the given host
-func runSSH(c command, host string, agentForwarding, quiet bool) error {
-	config, err := newSshClientConfig(c.User, c.Identity, agentForwarding)
+func runSSH(c command, host string, section *SshConfigFileSection, agentForwarding, quiet bool) error {
+	config, err := newSshClientConfig(host, section, c.User, c.Identity, agentForwarding)
 	if err != nil {
 		return err
 	}
-	session, err := config.NewSession(host)
+
+	session, err := config.NewSession(config.host)
 	if err != nil {
 		return err
 	}

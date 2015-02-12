@@ -32,17 +32,59 @@ type sshClientConfig struct {
 	// agent is the connection to the ssh agent
 	agent agent.Agent
 
+	// host to connect to
+	host string
+
 	*ssh.ClientConfig
+}
+
+// updateFromSshConfigFile updates the host, username and agentforwarding parameters
+// from the ~/.ssh/config if there is a matching section
+func updateFromSshConfigFile(section *SshConfigFileSection, host, userName *string, agentForwarding *bool) {
+	hostName, port, err := net.SplitHostPort(*host)
+	if err != nil {
+		return
+	}
+
+	if section.ForwardAgent == "yes" {
+		*agentForwarding = true
+	} else if section.ForwardAgent == "no" {
+		*agentForwarding = false
+	}
+	if section.User != "" {
+		*userName = section.User
+	}
+	if section.HostName != "" {
+		hostName = section.HostName
+	}
+	if section.Port != "" {
+		port = section.Port
+	}
+	*host = net.JoinHostPort(hostName, port)
 }
 
 // newSshClientConfig initializes the ssh configuration.
 // It connects with the ssh agent when agent forwarding is enabled.
-func newSshClientConfig(userName, identity string, agentForwarding bool) (*sshClientConfig, error) {
-	if agentForwarding {
-		return newSshAgentConfig(userName)
+func newSshClientConfig(host string, section *SshConfigFileSection, userName, identity string, agentForwarding bool) (*sshClientConfig, error) {
+	var (
+		config *sshClientConfig
+		err    error
+	)
+
+	if section != nil {
+		updateFromSshConfigFile(section, &host, &userName, &agentForwarding)
 	}
 
-	return newSshDefaultConfig(userName, identity)
+	if agentForwarding {
+		config, err = newSshAgentConfig(userName)
+	} else {
+		config, err = newSshDefaultConfig(userName, identity)
+	}
+
+	if config != nil {
+		config.host = host
+	}
+	return config, err
 }
 
 // newSshAgentConfig initializes the configuration to talk with an ssh agent.
