@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"strings"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -39,64 +38,42 @@ type sshClientConfig struct {
 	*ssh.ClientConfig
 }
 
-// parseSshConfig tries to parse the .ssh/config file to see
-// if a section matches the `host` and override the variables
-func parseSshConfig(path string, host, userName *string, identity string, agentForwarding *bool) {
-	// remove port
+// updateFromSshConfigFile updates the host, username and agentforwarding parameters
+// from the ~/.ssh/config if there is a matching section
+func updateFromSshConfigFile(section *SshConfigFileSection, host, userName *string, agentForwarding *bool) {
 	hostName, port, err := net.SplitHostPort(*host)
 	if err != nil {
 		return
 	}
 
-	// read file content
-	file, err := ioutil.ReadFile(path)
-	if err != nil {
-		return
+	if section.ForwardAgent == "yes" {
+		*agentForwarding = true
+	} else if section.ForwardAgent == "no" {
+		*agentForwarding = false
 	}
-	for _, section := range strings.Split(string(file), "Host ") {
-		section = strings.TrimSpace(section)
-		if section == "" {
-			continue
-		}
-
-		// found the section for the requested host
-		if strings.HasPrefix(section, hostName) {
-			for _, line := range strings.Split(section, "\n") {
-				line = strings.TrimSpace(line)
-				if line == "" {
-					continue
-				}
-				if strings.HasPrefix(line, "ForwardAgent") {
-					if strings.Contains(line, "yes") {
-						*agentForwarding = true
-					} else if strings.Contains(line, "no") {
-						*agentForwarding = false
-					}
-				}
-				if strings.HasPrefix(line, "User") {
-					*userName = strings.TrimSpace(strings.TrimPrefix(line, "User"))
-				}
-				if strings.HasPrefix(line, "HostName") {
-					hostName = strings.TrimSpace(strings.TrimPrefix(line, "HostName"))
-				}
-				if strings.HasPrefix(line, "Port") {
-					port = strings.TrimSpace(strings.TrimPrefix(line, "Port"))
-				}
-			}
-			*host = net.JoinHostPort(hostName, port)
-		}
+	if section.User != "" {
+		*userName = section.User
 	}
+	if section.HostName != "" {
+		hostName = section.HostName
+	}
+	if section.Port != "" {
+		port = section.Port
+	}
+	*host = net.JoinHostPort(hostName, port)
 }
 
 // newSshClientConfig initializes the ssh configuration.
 // It connects with the ssh agent when agent forwarding is enabled.
-func newSshClientConfig(host, userName, identity string, agentForwarding bool) (*sshClientConfig, error) {
+func newSshClientConfig(host string, section *SshConfigFileSection, userName, identity string, agentForwarding bool) (*sshClientConfig, error) {
 	var (
 		config *sshClientConfig
 		err    error
 	)
 
-	parseSshConfig(filepath.Join(os.Getenv("HOME"), ".ssh", "config"), &host, &userName, identity, &agentForwarding)
+	if section != nil {
+		updateFromSshConfigFile(section, &host, &userName, &agentForwarding)
+	}
 
 	if agentForwarding {
 		config, err = newSshAgentConfig(userName)
