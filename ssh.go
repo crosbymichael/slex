@@ -173,7 +173,7 @@ func sshAgentConfig(userName string, a agent.Agent) (*ssh.ClientConfig, error) {
 
 // sshDefaultConfig returns the SSH client config for the connection
 func sshDefaultConfig(userName, identity string) (*ssh.ClientConfig, error) {
-	contents, err := loadDefaultIdentity(userName, identity)
+	contents, err := loadIdentity(userName, identity)
 	if err != nil {
 		return nil, err
 	}
@@ -190,12 +190,15 @@ func sshDefaultConfig(userName, identity string) (*ssh.ClientConfig, error) {
 	}, nil
 }
 
-// loadDefaultIdentity returns the private key file's contents
-func loadDefaultIdentity(userName, identity string) ([]byte, error) {
-	u, err := user.Current()
-	if err != nil {
-		return nil, err
+// loadIdentity returns the private key file's contents
+func loadIdentity(userName, identity string) ([]byte, error) {
+	if filepath.Dir(identity) == "." {
+		u, err := user.Current()
+		if err != nil {
+			return nil, err
+		}
+		identity = filepath.Join(u.HomeDir, ".ssh", identity)
 	}
 
-	return ioutil.ReadFile(filepath.Join(u.HomeDir, ".ssh", identity))
+	return ioutil.ReadFile(identity)
 }

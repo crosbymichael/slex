@@ -4,7 +4,7 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/drone/drone/pkg/build/log"
+	"github.com/drone/drone/shared/build/log"
 )
 
 type SshConfigFileSection struct {
