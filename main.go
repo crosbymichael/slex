@@ -109,7 +109,7 @@ func runSSH(c command, host string, section *SshConfigFileSection, agentForwardi
 	}
 	defer func() {
 		session.Close()
-		log.Printf("Session complete from %s", host)
+		log.Printf("Session complete from %s@%s", section.User, host)
 	}()
 
 	for key, value := range c.Env {
