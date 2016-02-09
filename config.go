@@ -47,9 +47,7 @@ func parseSshConfigFile(path string) (map[string]*SshConfigFileSection, error) {
 
 	sections := make(map[string]*SshConfigFileSection)
 
-	_, err := os.Stat(path)
-
-	if err != nil && os.IsNotExist(err) {
+	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
 		log.Debugf("cannot find ssh config file: %s", path)
 		return sections, nil
 	}
