@@ -8,7 +8,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
-type SshConfigFileSection struct {
+type SSHConfigFileSection struct {
 	Host         string
 	ForwardAgent string
 	User         string
@@ -16,9 +16,9 @@ type SshConfigFileSection struct {
 	Port         string
 }
 
-// parseSshConfigFileSection parses a section from the ~/.ssh/config file
-func parseSshConfigFileSection(content string) *SshConfigFileSection {
-	section := &SshConfigFileSection{}
+// parseSSHConfigFileSection parses a section from the ~/.ssh/config file
+func parseSSHConfigFileSection(content string) *SSHConfigFileSection {
+	section := &SSHConfigFileSection{}
 
 	for n, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
@@ -42,10 +42,10 @@ func parseSshConfigFileSection(content string) *SshConfigFileSection {
 	return section
 }
 
-// parseSshConfigFile parses the ~/.ssh/config file and build a list of section
-func parseSshConfigFile(path string) (map[string]*SshConfigFileSection, error) {
+// parseSSHConfigFile parses the ~/.ssh/config file and build a list of section
+func parseSSHConfigFile(path string) (map[string]*SSHConfigFileSection, error) {
 
-	sections := make(map[string]*SshConfigFileSection)
+	sections := make(map[string]*SSHConfigFileSection)
 
 	log.Debugf("parsing ssh config file: %s", path)
 	content, err := ioutil.ReadFile(path)
@@ -63,7 +63,7 @@ func parseSshConfigFile(path string) (map[string]*SshConfigFileSection, error) {
 			continue
 		}
 
-		section := parseSshConfigFileSection(split)
+		section := parseSSHConfigFileSection(split)
 		sections[section.Host] = section
 	}
 

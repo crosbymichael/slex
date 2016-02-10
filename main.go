@@ -56,7 +56,7 @@ func multiplexAction(context *cli.Context) {
 		log.Fatal(err)
 	}
 
-	sections, err := parseSshConfigFile(filepath.Join(os.Getenv("HOME"), ".ssh", "config"))
+	sections, err := parseSSHConfigFile(filepath.Join(os.Getenv("HOME"), ".ssh", "config"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func multiplexAction(context *cli.Context) {
 	log.Debugf("finished executing %s on all hosts", c)
 }
 
-func executeCommand(c command, host string, section *SshConfigFileSection, agentForwarding, quiet bool, group *sync.WaitGroup) {
+func executeCommand(c command, host string, section *SSHConfigFileSection, agentForwarding, quiet bool, group *sync.WaitGroup) {
 	defer group.Done()
 	var (
 		err          error
@@ -92,8 +92,8 @@ func executeCommand(c command, host string, section *SshConfigFileSection, agent
 }
 
 // runSSH executes the given command on the given host
-func runSSH(c command, host string, section *SshConfigFileSection, agentForwarding, quiet bool) error {
-	config, err := newSshClientConfig(host, section, c.User, c.Identity, agentForwarding)
+func runSSH(c command, host string, section *SSHConfigFileSection, agentForwarding, quiet bool) error {
+	config, err := newSSHClientConfig(host, section, c.User, c.Identity, agentForwarding)
 	if err != nil {
 		return err
 	}

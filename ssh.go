@@ -38,9 +38,9 @@ type sshClientConfig struct {
 	*ssh.ClientConfig
 }
 
-// updateFromSshConfigFile updates the host, username and agentforwarding parameters
+// updateFromSSHConfigFile updates the host, username and agentforwarding parameters
 // from the ~/.ssh/config if there is a matching section
-func updateFromSshConfigFile(section *SshConfigFileSection, host, userName *string, agentForwarding *bool) {
+func updateFromSSHConfigFile(section *SSHConfigFileSection, host, userName *string, agentForwarding *bool) {
 	hostName, port, err := net.SplitHostPort(*host)
 	if err != nil {
 		return
@@ -63,22 +63,22 @@ func updateFromSshConfigFile(section *SshConfigFileSection, host, userName *stri
 	*host = net.JoinHostPort(hostName, port)
 }
 
-// newSshClientConfig initializes the ssh configuration.
+// newSSHClientConfig initializes the ssh configuration.
 // It connects with the ssh agent when agent forwarding is enabled.
-func newSshClientConfig(host string, section *SshConfigFileSection, userName, identity string, agentForwarding bool) (*sshClientConfig, error) {
+func newSSHClientConfig(host string, section *SSHConfigFileSection, userName, identity string, agentForwarding bool) (*sshClientConfig, error) {
 	var (
 		config *sshClientConfig
 		err    error
 	)
 
 	if section != nil {
-		updateFromSshConfigFile(section, &host, &userName, &agentForwarding)
+		updateFromSSHConfigFile(section, &host, &userName, &agentForwarding)
 	}
 
 	if agentForwarding {
-		config, err = newSshAgentConfig(userName)
+		config, err = newSSHAgentConfig(userName)
 	} else {
-		config, err = newSshDefaultConfig(userName, identity)
+		config, err = newSSHDefaultConfig(userName, identity)
 	}
 
 	if config != nil {
@@ -87,8 +87,8 @@ func newSshClientConfig(host string, section *SshConfigFileSection, userName, id
 	return config, err
 }
 
-// newSshAgentConfig initializes the configuration to talk with an ssh agent.
-func newSshAgentConfig(userName string) (*sshClientConfig, error) {
+// newSSHAgentConfig initializes the configuration to talk with an ssh agent.
+func newSSHAgentConfig(userName string) (*sshClientConfig, error) {
 	agent, err := newAgent()
 	if err != nil {
 		return nil, err
@@ -105,8 +105,8 @@ func newSshAgentConfig(userName string) (*sshClientConfig, error) {
 	}, nil
 }
 
-// newSshDefaultConfig initializes the configuration to use an ideitity file.
-func newSshDefaultConfig(userName, identity string) (*sshClientConfig, error) {
+// newSSHDefaultConfig initializes the configuration to use an ideitity file.
+func newSSHDefaultConfig(userName, identity string) (*sshClientConfig, error) {
 	config, err := sshDefaultConfig(userName, identity)
 	if err != nil {
 		return nil, err
