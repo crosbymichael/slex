@@ -2,6 +2,7 @@ package main
 
 import (
 	"io/ioutil"
+	"os"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
@@ -43,12 +44,19 @@ func parseSshConfigFileSection(content string) *SshConfigFileSection {
 
 // parseSshConfigFile parses the ~/.ssh/config file and build a list of section
 func parseSshConfigFile(path string) (map[string]*SshConfigFileSection, error) {
+
+	sections := make(map[string]*SshConfigFileSection)
+
 	log.Debugf("parsing ssh config file: %s", path)
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			log.Debugf("cannot find ssh config file: %s", path)
+			return sections, nil
+		}
 		return nil, err
 	}
-	sections := make(map[string]*SshConfigFileSection)
+
 	for _, split := range strings.Split(string(content), "Host ") {
 		split = strings.TrimSpace(split)
 		if split == "" {
