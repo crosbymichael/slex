@@ -47,14 +47,13 @@ func parseSshConfigFile(path string) (map[string]*SshConfigFileSection, error) {
 
 	sections := make(map[string]*SshConfigFileSection)
 
-	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
-		log.Debugf("cannot find ssh config file: %s", path)
-		return sections, nil
-	}
-
 	log.Debugf("parsing ssh config file: %s", path)
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			log.Debugf("cannot find ssh config file: %s", path)
+			return sections, nil
+		}
 		return nil, err
 	}
 
