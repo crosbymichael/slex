@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -44,25 +45,25 @@ func loadHosts(context *cli.Context) ([]string, error) {
 
 // multiplexAction uses the arguments passed via the command line and
 // multiplexes them across multiple SSH connections
-func multiplexAction(context *cli.Context) {
+func multiplexAction(context *cli.Context) error {
 	c, err := newCommand(context)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	log.Debug(c)
 
 	hosts, err := loadHosts(context)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	sections, err := parseSSHConfigFile(filepath.Join(os.Getenv("HOME"), ".ssh", "config"))
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	if len(hosts) == 0 {
-		log.Fatal("no host specified for command to run")
+		return fmt.Errorf("no host specified for command to run")
 	}
 	log.Debugf("hosts %v", hosts)
 	group := &sync.WaitGroup{}
@@ -72,6 +73,7 @@ func multiplexAction(context *cli.Context) {
 	}
 	group.Wait()
 	log.Debugf("finished executing %s on all hosts", c)
+	return nil
 }
 
 func executeCommand(c command, host string, section *SSHConfigFileSection, agentForwarding, quiet bool, group *sync.WaitGroup) {
@@ -141,7 +143,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "slex"
 	app.Usage = "SSH commands multiplexed"
-	app.Version = "1"
+	app.Version = "2"
 	app.Author = "@crosbymichael"
 	app.Email = "crosbymichael@gmail.com"
 	app.Before = preload
