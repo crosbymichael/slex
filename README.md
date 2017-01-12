@@ -7,6 +7,13 @@ It is very similar to fabric except that it is written in Go so you don't have t
 have python installed on your system and you don't *have* to write a script or 
 configuration files if you do not want to.
 
+## Building
+
+To build `slex` you must have a working Go install then you can run:
+
+```bash
+go get -d github.com/crosbymichael/slex
+```
 
 ```bash
 slex -h
