@@ -1,5 +1,7 @@
 ## SLEX
 
+[![Build Status](https://travis-ci.org/crosbymichael/slex.svg?branch=master)](https://travis-ci.org/crosbymichael/slex)
+
 slex is a simple binary that allows you to run a command on multiple hosts via SSH.
 It is very similar to fabric except that it is written in Go so you don't have to 
 have python installed on your system and you don't *have* to write a script or 
