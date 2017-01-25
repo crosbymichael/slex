@@ -1,15 +1,20 @@
 package main
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
 	"os/user"
 	"path/filepath"
+	"syscall"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 // sshSession stores the open session and connection to execute a command.
@@ -177,9 +182,49 @@ func sshDefaultConfig(userName, identity string) (*ssh.ClientConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	signer, err := ssh.ParsePrivateKey(contents)
-	if err != nil {
-		return nil, err
+
+	// handle plain and encrypted private key file
+	block, _ := pem.Decode(contents)
+	if block == nil {
+		return nil, fmt.Errorf("cannot decode private key file %s", identity)
+	}
+
+	var signer ssh.Signer
+	if x509.IsEncryptedPEMBlock(block) {
+		fmt.Print("Key passphrase: ")
+		pass, err := terminal.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return nil, err
+		}
+		block.Bytes, err = x509.DecryptPEMBlock(block, pass)
+		if err != nil {
+			return nil, err
+		}
+
+		var key interface{}
+		switch block.Type {
+		case "RSA PRIVATE KEY":
+			key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+		case "EC PRIVATE KEY":
+			key, err = x509.ParseECPrivateKey(block.Bytes)
+		case "DSA PRIVATE KEY":
+			key, err = ssh.ParseDSAPrivateKey(block.Bytes)
+		default:
+			return nil, fmt.Errorf("unsupported key type %q", block.Type)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		signer, err = ssh.NewSignerFromKey(key)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		signer, err = ssh.ParsePrivateKey(contents)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &ssh.ClientConfig{
