@@ -11,6 +11,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 // preload initializes any global options and configuration
@@ -66,17 +68,29 @@ func multiplexAction(context *cli.Context) error {
 		return fmt.Errorf("no host specified for command to run")
 	}
 	log.Debugf("hosts %v", hosts)
+
+	agentForwarding := context.GlobalBool("A")
+	var agt agent.Agent
+	if agentForwarding {
+		agt, err = newAgent()
+		if err != nil {
+			return err
+		}
+	}
+	methods := defaultAuthMethods(c.User, c.Identity, agt)
+
+	quiet := context.GlobalBool("quiet")
 	group := &sync.WaitGroup{}
 	for _, h := range hosts {
 		group.Add(1)
-		go executeCommand(c, h, sections[h], context.GlobalBool("A"), context.GlobalBool("quiet"), group)
+		go executeCommand(c, h, sections[h], agt, methods, quiet, group)
 	}
 	group.Wait()
 	log.Debugf("finished executing %s on all hosts", c)
 	return nil
 }
 
-func executeCommand(c command, host string, section *SSHConfigFileSection, agentForwarding, quiet bool, group *sync.WaitGroup) {
+func executeCommand(c command, host string, section *SSHConfigFileSection, agt agent.Agent, methods map[string]ssh.AuthMethod, quiet bool, group *sync.WaitGroup) {
 	defer group.Done()
 	var (
 		err          error
@@ -87,15 +101,15 @@ func executeCommand(c command, host string, section *SSHConfigFileSection, agent
 		return
 	}
 
-	if err = runSSH(c, host, section, agentForwarding, quiet); err != nil {
+	if err = runSSH(c, host, section, agt, methods, quiet); err != nil {
 		log.WithField("host", host).Error(err)
 		return
 	}
 }
 
 // runSSH executes the given command on the given host
-func runSSH(c command, host string, section *SSHConfigFileSection, agentForwarding, quiet bool) error {
-	config, err := newSSHClientConfig(host, section, c.User, c.Identity, agentForwarding)
+func runSSH(c command, host string, section *SSHConfigFileSection, agt agent.Agent, methods map[string]ssh.AuthMethod, quiet bool) error {
+	config, err := newSSHClientConfig(c.User, host, section, agt, methods)
 	if err != nil {
 		return err
 	}
