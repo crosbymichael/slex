@@ -157,7 +157,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "slex"
 	app.Usage = "SSH commands multiplexed"
-	app.Version = "2"
+	app.Version = "3"
 	app.Author = "@crosbymichael"
 	app.Email = "crosbymichael@gmail.com"
 	app.Before = preload
