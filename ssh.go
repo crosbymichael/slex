@@ -43,19 +43,14 @@ type sshClientConfig struct {
 	*ssh.ClientConfig
 }
 
-// updateFromSSHConfigFile updates the host, username and agentforwarding parameters
-// from the ~/.ssh/config if there is a matching section
-func updateFromSSHConfigFile(section *SSHConfigFileSection, host, userName *string, agentForwarding *bool) {
+// updateFromSSHConfigFile updates the host, username parameters
+// from the ~/.ssh/config if there is a matching section.
+func updateFromSSHConfigFile(section *SSHConfigFileSection, host, userName *string) {
 	hostName, port, err := net.SplitHostPort(*host)
 	if err != nil {
 		return
 	}
 
-	if section.ForwardAgent == "yes" {
-		*agentForwarding = true
-	} else if section.ForwardAgent == "no" {
-		*agentForwarding = false
-	}
 	if section.User != "" {
 		*userName = section.User
 	}
@@ -68,56 +63,32 @@ func updateFromSSHConfigFile(section *SSHConfigFileSection, host, userName *stri
 	*host = net.JoinHostPort(hostName, port)
 }
 
-// newSSHClientConfig initializes the ssh configuration.
-// It connects with the ssh agent when agent forwarding is enabled.
-func newSSHClientConfig(host string, section *SSHConfigFileSection, userName, identity string, agentForwarding bool) (*sshClientConfig, error) {
-	var (
-		config *sshClientConfig
-		err    error
-	)
-
+// newSSHClientConfig initializes per-host SSH configuration.
+// All available SSH authentication methods will be applied.
+func newSSHClientConfig(user, host string, section *SSHConfigFileSection, agt agent.Agent, methods map[string]ssh.AuthMethod) (*sshClientConfig, error) {
 	if section != nil {
-		updateFromSSHConfigFile(section, &host, &userName, &agentForwarding)
+		// FIXME: Add host specific AuthMethod if IdentityFile is defined in section
+		updateFromSSHConfigFile(section, &host, &user)
 	}
 
-	if agentForwarding {
-		config, err = newSSHAgentConfig(userName)
-	} else {
-		config, err = newSSHDefaultConfig(userName, identity)
+	if len(methods) < 1 {
+		return nil, fmt.Errorf("No authentication method provided for host %s", host)
 	}
 
-	if config != nil {
-		config.host = host
-	}
-	return config, err
-}
-
-// newSSHAgentConfig initializes the configuration to talk with an ssh agent.
-func newSSHAgentConfig(userName string) (*sshClientConfig, error) {
-	agent, err := newAgent()
-	if err != nil {
-		return nil, err
+	var auth []ssh.AuthMethod
+	for _, m := range methods {
+		auth = append(auth, m)
 	}
 
-	config, err := sshAgentConfig(userName, agent)
-	if err != nil {
-		return nil, err
+	config := &ssh.ClientConfig{
+		User: user,
+		Auth: auth,
 	}
-
 	return &sshClientConfig{
-		agent:        agent,
+		agent:        agt,
+		host:         host,
 		ClientConfig: config,
 	}, nil
-}
-
-// newSSHDefaultConfig initializes the configuration to use an ideitity file.
-func newSSHDefaultConfig(userName, identity string) (*sshClientConfig, error) {
-	config, err := sshDefaultConfig(userName, identity)
-	if err != nil {
-		return nil, err
-	}
-
-	return &sshClientConfig{ClientConfig: config}, nil
 }
 
 // NewSession creates a new ssh session with the host.
@@ -160,24 +131,35 @@ func newAgent() (agent.Agent, error) {
 	return agent.NewClient(conn), nil
 }
 
-// sshAgentConfig creates a new configuration for the ssh client
-// with the signatures from the ssh agent.
-func sshAgentConfig(userName string, a agent.Agent) (*ssh.ClientConfig, error) {
-	signers, err := a.Signers()
+// defaultAuthMethods initializes all the available SSH authentication method.
+func defaultAuthMethods(user, identity string, agt agent.Agent) map[string]ssh.AuthMethod {
+	methods := make(map[string]ssh.AuthMethod)
+
+	if m, err := newSSHPublicKeyAuthMethod(user, identity); err == nil {
+		methods[identity] = m
+	}
+
+	if agt != nil {
+		if m, err := newSSHAgentAuthMethod(agt); err == nil {
+			methods["agent"] = m
+		}
+	}
+
+	return methods
+}
+
+// newSSHPublicKeyAuthMethod creates a new SSH authentication method using SSH agent
+func newSSHAgentAuthMethod(agt agent.Agent) (ssh.AuthMethod, error) {
+	signers, err := agt.Signers()
 	if err != nil {
 		return nil, err
 	}
 
-	return &ssh.ClientConfig{
-		User: userName,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(signers...),
-		},
-	}, nil
+	return ssh.PublicKeys(signers...), nil
 }
 
-// sshDefaultConfig returns the SSH client config for the connection
-func sshDefaultConfig(userName, identity string) (*ssh.ClientConfig, error) {
+// newSSHPublicKeyAuthMethod creates a new SSH authentication method using public/private key
+func newSSHPublicKeyAuthMethod(userName, identity string) (ssh.AuthMethod, error) {
 	contents, err := loadIdentity(userName, identity)
 	if err != nil {
 		return nil, err
@@ -196,6 +178,8 @@ func sshDefaultConfig(userName, identity string) (*ssh.ClientConfig, error) {
 		if err != nil {
 			return nil, err
 		}
+		fmt.Println("")
+
 		block.Bytes, err = x509.DecryptPEMBlock(block, pass)
 		if err != nil {
 			return nil, err
@@ -227,12 +211,7 @@ func sshDefaultConfig(userName, identity string) (*ssh.ClientConfig, error) {
 		}
 	}
 
-	return &ssh.ClientConfig{
-		User: userName,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(signer),
-		},
-	}, nil
+	return ssh.PublicKeys(signer), nil
 }
 
 // loadIdentity returns the private key file's contents
