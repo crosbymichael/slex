@@ -77,7 +77,12 @@ func multiplexAction(context *cli.Context) error {
 			return err
 		}
 	}
-	methods := defaultAuthMethods(c.User, c.Identity, agt)
+
+	identity, err := resolveIdentity(c.Identity)
+	if err != nil {
+		return err
+	}
+	methods := defaultAuthMethods(c.User, identity, agt)
 
 	quiet := context.GlobalBool("quiet")
 	group := &sync.WaitGroup{}

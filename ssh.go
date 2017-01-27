@@ -126,7 +126,7 @@ func defaultAuthMethods(user, identity string, agt agent.Agent) map[string]ssh.A
 
 	if agt != nil {
 		if m, err := newSSHAgentAuthMethod(agt); err == nil {
-			methods["agent"] = m
+			methods["ssh-agent"] = m
 		}
 	}
 
@@ -145,7 +145,7 @@ func newSSHAgentAuthMethod(agt agent.Agent) (ssh.AuthMethod, error) {
 
 // newSSHPublicKeyAuthMethod creates a new SSH authentication method using public/private key
 func newSSHPublicKeyAuthMethod(userName, identity string) (ssh.AuthMethod, error) {
-	contents, err := loadIdentity(userName, identity)
+	contents, err := ioutil.ReadFile(identity)
 	if err != nil {
 		return nil, err
 	}
@@ -199,15 +199,15 @@ func newSSHPublicKeyAuthMethod(userName, identity string) (ssh.AuthMethod, error
 	return ssh.PublicKeys(signer), nil
 }
 
-// loadIdentity returns the private key file's contents
-func loadIdentity(userName, identity string) ([]byte, error) {
-	if filepath.Dir(identity) == "." {
-		u, err := user.Current()
-		if err != nil {
-			return nil, err
-		}
-		identity = filepath.Join(u.HomeDir, ".ssh", identity)
+// resolveIdentity returns the realpath of the private key file.
+func resolveIdentity(identity string) (string, error) {
+	if filepath.Dir(identity) != "." {
+		return identity, nil
 	}
 
-	return ioutil.ReadFile(identity)
+	u, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(u.HomeDir, ".ssh", identity), nil
 }
