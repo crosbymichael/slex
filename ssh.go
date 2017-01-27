@@ -64,31 +64,16 @@ func updateFromSSHConfigFile(section *SSHConfigFileSection, host, userName *stri
 }
 
 // newSSHClientConfig initializes per-host SSH configuration.
-// All available SSH authentication methods will be applied.
-func newSSHClientConfig(user, host string, section *SSHConfigFileSection, agt agent.Agent, methods map[string]ssh.AuthMethod) (*sshClientConfig, error) {
-	if section != nil {
-		// FIXME: Add host specific AuthMethod if IdentityFile is defined in section
-		updateFromSSHConfigFile(section, &host, &user)
-	}
-
-	if len(methods) < 1 {
-		return nil, fmt.Errorf("No authentication method provided for host %s", host)
-	}
-
-	var auth []ssh.AuthMethod
-	for _, m := range methods {
-		auth = append(auth, m)
-	}
-
+func newSSHClientConfig(user, host string, section *SSHConfigFileSection, agt agent.Agent, method ssh.AuthMethod) *sshClientConfig {
 	config := &ssh.ClientConfig{
 		User: user,
-		Auth: auth,
+		Auth: []ssh.AuthMethod{method},
 	}
 	return &sshClientConfig{
 		agent:        agt,
 		host:         host,
 		ClientConfig: config,
-	}, nil
+	}
 }
 
 // NewSession creates a new ssh session with the host.
