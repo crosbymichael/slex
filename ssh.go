@@ -64,37 +64,22 @@ func updateFromSSHConfigFile(section *SSHConfigFileSection, host, userName *stri
 }
 
 // newSSHClientConfig initializes per-host SSH configuration.
-// All available SSH authentication methods will be applied.
-func newSSHClientConfig(user, host string, section *SSHConfigFileSection, agt agent.Agent, methods map[string]ssh.AuthMethod) (*sshClientConfig, error) {
-	if section != nil {
-		// FIXME: Add host specific AuthMethod if IdentityFile is defined in section
-		updateFromSSHConfigFile(section, &host, &user)
-	}
-
-	if len(methods) < 1 {
-		return nil, fmt.Errorf("No authentication method provided for host %s", host)
-	}
-
-	var auth []ssh.AuthMethod
-	for _, m := range methods {
-		auth = append(auth, m)
-	}
-
+func newSSHClientConfig(user, host string, section *SSHConfigFileSection, agt agent.Agent, method ssh.AuthMethod) *sshClientConfig {
 	config := &ssh.ClientConfig{
 		User: user,
-		Auth: auth,
+		Auth: []ssh.AuthMethod{method},
 	}
 	return &sshClientConfig{
 		agent:        agt,
 		host:         host,
 		ClientConfig: config,
-	}, nil
+	}
 }
 
 // NewSession creates a new ssh session with the host.
 // It forwards authentication to the agent when it's configured.
-func (s *sshClientConfig) NewSession(host string) (*sshSession, error) {
-	conn, err := ssh.Dial("tcp", host, s.ClientConfig)
+func (s *sshClientConfig) NewSession() (*sshSession, error) {
+	conn, err := ssh.Dial("tcp", s.host, s.ClientConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +126,7 @@ func defaultAuthMethods(user, identity string, agt agent.Agent) map[string]ssh.A
 
 	if agt != nil {
 		if m, err := newSSHAgentAuthMethod(agt); err == nil {
-			methods["agent"] = m
+			methods["ssh-agent"] = m
 		}
 	}
 
@@ -160,7 +145,7 @@ func newSSHAgentAuthMethod(agt agent.Agent) (ssh.AuthMethod, error) {
 
 // newSSHPublicKeyAuthMethod creates a new SSH authentication method using public/private key
 func newSSHPublicKeyAuthMethod(userName, identity string) (ssh.AuthMethod, error) {
-	contents, err := loadIdentity(userName, identity)
+	contents, err := ioutil.ReadFile(identity)
 	if err != nil {
 		return nil, err
 	}
@@ -214,15 +199,15 @@ func newSSHPublicKeyAuthMethod(userName, identity string) (ssh.AuthMethod, error
 	return ssh.PublicKeys(signer), nil
 }
 
-// loadIdentity returns the private key file's contents
-func loadIdentity(userName, identity string) ([]byte, error) {
-	if filepath.Dir(identity) == "." {
-		u, err := user.Current()
-		if err != nil {
-			return nil, err
-		}
-		identity = filepath.Join(u.HomeDir, ".ssh", identity)
+// resolveIdentity returns the realpath of the private key file.
+func resolveIdentity(identity string) (string, error) {
+	if filepath.Dir(identity) != "." {
+		return identity, nil
 	}
 
-	return ioutil.ReadFile(identity)
+	u, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(u.HomeDir, ".ssh", identity), nil
 }

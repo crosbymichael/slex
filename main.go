@@ -77,7 +77,12 @@ func multiplexAction(context *cli.Context) error {
 			return err
 		}
 	}
-	methods := defaultAuthMethods(c.User, c.Identity, agt)
+
+	identity, err := resolveIdentity(c.Identity)
+	if err != nil {
+		return err
+	}
+	methods := defaultAuthMethods(c.User, identity, agt)
 
 	quiet := context.GlobalBool("quiet")
 	group := &sync.WaitGroup{}
@@ -107,17 +112,35 @@ func executeCommand(c command, host string, section *SSHConfigFileSection, agt a
 	}
 }
 
-// runSSH executes the given command on the given host
+// runSSH executes the given command on the given host.
+// All available SSH authentication methods to the host will be tried.
 func runSSH(c command, host string, section *SSHConfigFileSection, agt agent.Agent, methods map[string]ssh.AuthMethod, quiet bool) error {
-	config, err := newSSHClientConfig(c.User, host, section, agt, methods)
-	if err != nil {
-		return err
+	user := c.User
+
+	if section != nil {
+		// FIXME: Add host specific AuthMethod if IdentityFile is defined in section
+		updateFromSSHConfigFile(section, &host, &user)
 	}
 
-	session, err := config.NewSession(config.host)
-	if err != nil {
-		return err
+	// Try using each available AuthMethod to establish SSH session
+	var (
+		session *sshSession
+		err     error
+	)
+	for k, m := range methods {
+		config := newSSHClientConfig(c.User, host, section, agt, m)
+		session, err = config.NewSession()
+		if err == nil {
+			break // Session established, quit trying the next AuthMethod
+		}
+
+		log.Warningf("Failed to establish session with %v - %v", k, err)
 	}
+
+	if session == nil {
+		return fmt.Errorf("none of the provided authentication methods can establish SSH session successfully")
+	}
+
 	if !quiet {
 		w := newBufCloser(os.Stdout)
 		defer w.Close()
@@ -125,7 +148,7 @@ func runSSH(c command, host string, section *SSHConfigFileSection, agt agent.Age
 	}
 	defer func() {
 		session.Close()
-		log.Printf("Session complete from %s@%s", config.User, host)
+		log.Printf("Session complete from %s@%s", user, host)
 	}()
 
 	for key, value := range c.Env {
