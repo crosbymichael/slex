@@ -129,7 +129,7 @@ func runSSH(c command, host string, section *SSHConfigFileSection, agt agent.Age
 	)
 	for k, m := range methods {
 		config := newSSHClientConfig(c.User, host, section, agt, m)
-		session, err = config.NewSession(config.host)
+		session, err = config.NewSession()
 		if err == nil {
 			break // Session established, quit trying the next AuthMethod
 		}
