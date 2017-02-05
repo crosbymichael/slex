@@ -43,24 +43,24 @@ type sshClientConfig struct {
 	*ssh.ClientConfig
 }
 
-// updateFromSSHConfigFile updates the host, username parameters
+// updateFromSSHConfigFile updates SSH client parameters
 // from the ~/.ssh/config if there is a matching section.
-func updateFromSSHConfigFile(section *SSHConfigFileSection, host, userName *string) {
-	hostName, port, err := net.SplitHostPort(*host)
-	if err != nil {
-		return
+func updateFromSSHConfigFile(section *SSHConfigFileSection, host, user *string, methods *map[string]ssh.AuthMethod) {
+	if section.User != "" {
+		*user = section.User
 	}
 
-	if section.User != "" {
-		*userName = section.User
+	if section.HostName != "" && section.Port != "" {
+		*host = net.JoinHostPort(section.HostName, section.Port)
 	}
-	if section.HostName != "" {
-		hostName = section.HostName
+
+	if section.IdentityFile != "" {
+		if identity, err := resolveIdentity(section.IdentityFile); err == nil {
+			if m, err := newSSHPublicKeyAuthMethod(*user, identity); err == nil {
+				(*methods)[identity] = m
+			}
+		}
 	}
-	if section.Port != "" {
-		port = section.Port
-	}
-	*host = net.JoinHostPort(hostName, port)
 }
 
 // newSSHClientConfig initializes per-host SSH configuration.

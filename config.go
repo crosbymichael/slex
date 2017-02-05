@@ -14,6 +14,7 @@ type SSHConfigFileSection struct {
 	User         string
 	HostName     string
 	Port         string
+	IdentityFile string
 }
 
 // parseSSHConfigFileSection parses a section from the ~/.ssh/config file
@@ -36,6 +37,8 @@ func parseSSHConfigFileSection(content string) *SSHConfigFileSection {
 			section.HostName = strings.TrimSpace(strings.TrimPrefix(line, "HostName"))
 		} else if strings.HasPrefix(line, "Port") {
 			section.Port = strings.TrimSpace(strings.TrimPrefix(line, "Port"))
+		} else if strings.HasPrefix(line, "IdentityFile") {
+			section.IdentityFile = strings.TrimSpace(strings.TrimPrefix(line, "IdentityFile"))
 		}
 	}
 	log.Debugf("parsed ssh config file section: %s", section.Host)
