@@ -117,9 +117,10 @@ func executeCommand(c command, host string, section *SSHConfigFileSection, agt a
 func runSSH(c command, host string, section *SSHConfigFileSection, agt agent.Agent, methods map[string]ssh.AuthMethod, quiet bool) error {
 	user := c.User
 
+	// Update SSH parameters from ~/.ssh/config
 	if section != nil {
-		// FIXME: Add host specific AuthMethod if IdentityFile is defined in section
-		updateFromSSHConfigFile(section, &host, &user)
+		log.Debugf("Updating SSH client parameters for host: %s", host)
+		updateFromSSHConfigFile(section, &host, &user, &methods)
 	}
 
 	// Try using each available AuthMethod to establish SSH session
@@ -128,13 +129,13 @@ func runSSH(c command, host string, section *SSHConfigFileSection, agt agent.Age
 		err     error
 	)
 	for k, m := range methods {
-		config := newSSHClientConfig(c.User, host, section, agt, m)
+		config := newSSHClientConfig(user, host, section, agt, m)
 		session, err = config.NewSession()
 		if err == nil {
 			break // Session established, quit trying the next AuthMethod
 		}
 
-		log.Warningf("Failed to establish session with %v - %v", k, err)
+		log.Debugf("Failed to establish session with %v - %v", k, err)
 	}
 
 	if session == nil {
