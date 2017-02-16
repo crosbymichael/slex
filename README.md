@@ -30,16 +30,22 @@ AUTHOR:
   @crosbymichael - <crosbymichael@gmail.com>
 
 COMMANDS:
-   help, h      Shows a list of commands or help for one command
+   help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-   --debug                              enable debug output for the logs
-   --host '--host option --host option' SSH host address
-   --user, -u 'root'                    user to execute the command as
-   --identity, -i 'id_rsa'              SSH identity to use for connecting to the host
-   --agent, -A                          use ssh agent forwarding for authentication, rather than identity
-   --help, -h                           show help
-   --version, -v                        print the version
+   --debug                     enable debug output for the logs
+   --host value                SSH host address
+   --hosts value               file containing host addresses separated by a new line
+   --user value, -u value      user to execute the command as (default: "root")
+   --identity value, -i value  SSH identity to use for connecting to the host (default: "id_r
+sa")
+   --option value, -o value    SSH client option
+   --agent, -A                 Forward authentication request to the ssh agent
+   --env value, -e value       set environment variables for SSH command
+   --quiet, -q                 disable output from the ssh command
+   --help, -h                  show help
+   --version, -v               print the version
+
 ```
 
 ### Get the uptime for all servers
