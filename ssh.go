@@ -78,10 +78,27 @@ func newSSHClientConfig(user, host string, section *SSHConfigFileSection, agt ag
 
 // NewSession creates a new ssh session with the host.
 // It forwards authentication to the agent when it's configured.
-func (s *sshClientConfig) NewSession() (*sshSession, error) {
-	conn, err := ssh.Dial("tcp", s.host, s.ClientConfig)
-	if err != nil {
-		return nil, err
+func (s *sshClientConfig) NewSession(options map[string]string) (*sshSession, error) {
+	var (
+		conn *ssh.Client
+		err  error
+	)
+
+	if proxyCmd, ok := options["ProxyCommand"]; ok {
+		cmdConn, err := NewProxyCmdConn(s, proxyCmd)
+		if err != nil {
+			return nil, err
+		}
+		c, chans, reqs, err := ssh.NewClientConn(cmdConn, "", s.ClientConfig)
+		if err != nil {
+			return nil, err
+		}
+		conn = ssh.NewClient(c, chans, reqs)
+	} else {
+		conn, err = ssh.Dial("tcp", s.host, s.ClientConfig)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if s.agent != nil {

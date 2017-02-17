@@ -45,6 +45,19 @@ func loadHosts(context *cli.Context) ([]string, error) {
 	return hosts, nil
 }
 
+// getOptions returns the SSH client options given on the command line.
+func getOptions(context *cli.Context) map[string]string {
+	options := make(map[string]string)
+
+	ins := []string(context.GlobalStringSlice("option"))
+	for _, i := range ins {
+		pair := strings.SplitN(i, " ", 2)
+		options[pair[0]] = pair[1]
+	}
+
+	return options
+}
+
 // multiplexAction uses the arguments passed via the command line and
 // multiplexes them across multiple SSH connections
 func multiplexAction(context *cli.Context) error {
@@ -84,18 +97,20 @@ func multiplexAction(context *cli.Context) error {
 	}
 	methods := defaultAuthMethods(c.User, identity, agt)
 
+	options := getOptions(context)
+
 	quiet := context.GlobalBool("quiet")
 	group := &sync.WaitGroup{}
 	for _, h := range hosts {
 		group.Add(1)
-		go executeCommand(c, h, sections[h], agt, methods, quiet, group)
+		go executeCommand(c, h, sections[h], agt, methods, quiet, options, group)
 	}
 	group.Wait()
 	log.Debugf("finished executing %s on all hosts", c)
 	return nil
 }
 
-func executeCommand(c command, host string, section *SSHConfigFileSection, agt agent.Agent, methods map[string]ssh.AuthMethod, quiet bool, group *sync.WaitGroup) {
+func executeCommand(c command, host string, section *SSHConfigFileSection, agt agent.Agent, methods map[string]ssh.AuthMethod, quiet bool, options map[string]string, group *sync.WaitGroup) {
 	defer group.Done()
 	var (
 		err          error
@@ -106,7 +121,7 @@ func executeCommand(c command, host string, section *SSHConfigFileSection, agt a
 		return
 	}
 
-	if err = runSSH(c, host, section, agt, methods, quiet); err != nil {
+	if err = runSSH(c, host, section, agt, methods, quiet, options); err != nil {
 		log.WithField("host", host).Error(err)
 		return
 	}
@@ -114,7 +129,7 @@ func executeCommand(c command, host string, section *SSHConfigFileSection, agt a
 
 // runSSH executes the given command on the given host.
 // All available SSH authentication methods to the host will be tried.
-func runSSH(c command, host string, section *SSHConfigFileSection, agt agent.Agent, methods map[string]ssh.AuthMethod, quiet bool) error {
+func runSSH(c command, host string, section *SSHConfigFileSection, agt agent.Agent, methods map[string]ssh.AuthMethod, quiet bool, options map[string]string) error {
 	user := c.User
 
 	// Update SSH parameters from ~/.ssh/config
@@ -130,7 +145,7 @@ func runSSH(c command, host string, section *SSHConfigFileSection, agt agent.Age
 	)
 	for k, m := range methods {
 		config := newSSHClientConfig(user, host, section, agt, m)
-		session, err = config.NewSession()
+		session, err = config.NewSession(options)
 		if err == nil {
 			break // Session established, quit trying the next AuthMethod
 		}
@@ -208,6 +223,11 @@ func main() {
 			Name:  "identity,i",
 			Value: "id_rsa",
 			Usage: "SSH identity to use for connecting to the host",
+		},
+		cli.StringSliceFlag{
+			Name:  "option,o",
+			Value: &cli.StringSlice{},
+			Usage: "SSH client option",
 		},
 		cli.BoolFlag{
 			Name:  "agent,A",
