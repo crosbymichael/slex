@@ -10,7 +10,9 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"syscall"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -64,16 +66,27 @@ func updateFromSSHConfigFile(section *SSHConfigFileSection, host, user *string, 
 }
 
 // newSSHClientConfig initializes per-host SSH configuration.
-func newSSHClientConfig(user, host string, section *SSHConfigFileSection, agt agent.Agent, method ssh.AuthMethod) *sshClientConfig {
+func newSSHClientConfig(user, host string, section *SSHConfigFileSection, agt agent.Agent, method ssh.AuthMethod, options map[string]string) (*sshClientConfig, error) {
+	var timeout time.Duration
+
+	if ct, ok := options["ConnectTimeout"]; ok {
+		t, err := strconv.Atoi(ct)
+		if err != nil {
+			return nil, fmt.Errorf("ConnectTimeout is not an integer")
+		}
+		timeout = time.Second * time.Duration(t)
+	}
+
 	config := &ssh.ClientConfig{
-		User: user,
-		Auth: []ssh.AuthMethod{method},
+		User:    user,
+		Auth:    []ssh.AuthMethod{method},
+		Timeout: timeout,
 	}
 	return &sshClientConfig{
 		agent:        agt,
 		host:         host,
 		ClientConfig: config,
-	}
+	}, nil
 }
 
 // NewSession creates a new ssh session with the host.
