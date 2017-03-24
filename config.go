@@ -3,6 +3,7 @@ package main
 import (
 	"io/ioutil"
 	"os"
+	"regexp"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
@@ -71,4 +72,21 @@ func parseSSHConfigFile(path string) (map[string]*SSHConfigFileSection, error) {
 	}
 
 	return sections, nil
+}
+
+// ParseOptions converts a list of OpenSSH client options to key-value pairs.
+// Each option in the list is a keyword-argument pair which is
+// either separated by whitespace or optional whitespace and exactly one '='.
+// For the full list of options, see man 5 ssh_config.
+func ParseOptions(plainOpts []string) map[string]string {
+	optionExpr := regexp.MustCompile("(\\w+)\\s*=?\\s*(.+)")
+	options := make(map[string]string)
+
+	for _, i := range plainOpts {
+		m := optionExpr.FindStringSubmatch(i)
+		options[m[1]] = m[2]
+	}
+
+	log.Debugf("parsed SSH options: %v", options)
+	return options
 }
