@@ -47,7 +47,7 @@ func NewProxyCmdConn(s *sshClientConfig, cmd string) (*ProxyCmdConn, error) {
 	if err := c.Start(); err != nil {
 		return nil, err
 	}
-	log.Debugf("ProxyCommand started: '%s %s'.", cmd, strings.Join(args, " "))
+	log.Debugf("ProxyCommand started: '%s %s'.", args[0], strings.Join(args[1:], " "))
 
 	return &ProxyCmdConn{
 		ReadCloser:  stdout,
