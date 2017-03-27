@@ -45,19 +45,6 @@ func loadHosts(context *cli.Context) ([]string, error) {
 	return hosts, nil
 }
 
-// getOptions returns the SSH client options given on the command line.
-func getOptions(context *cli.Context) map[string]string {
-	options := make(map[string]string)
-
-	ins := []string(context.GlobalStringSlice("option"))
-	for _, i := range ins {
-		pair := strings.SplitN(i, " ", 2)
-		options[pair[0]] = pair[1]
-	}
-
-	return options
-}
-
 // multiplexAction uses the arguments passed via the command line and
 // multiplexes them across multiple SSH connections
 func multiplexAction(context *cli.Context) error {
@@ -97,7 +84,8 @@ func multiplexAction(context *cli.Context) error {
 	}
 	methods := defaultAuthMethods(c.User, identity, agt)
 
-	options := getOptions(context)
+	plainOptions := []string(context.GlobalStringSlice("option"))
+	options := ParseOptions(plainOptions)
 
 	quiet := context.GlobalBool("quiet")
 	group := &sync.WaitGroup{}
