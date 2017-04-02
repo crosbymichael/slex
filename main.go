@@ -78,11 +78,11 @@ func multiplexAction(context *cli.Context) error {
 		}
 	}
 
-	identity, err := resolveIdentity(c.Identity)
-	if err != nil {
-		return err
+	identityFiles := []string{}
+	if c.Identity != "" {
+		identityFiles = append(identityFiles, c.Identity)
 	}
-	methods := defaultAuthMethods(c.User, identity, agt)
+	methods := defaultAuthMethods(identityFiles, agt)
 
 	plainOptions := []string(context.GlobalStringSlice("option"))
 	options := ParseOptions(plainOptions)
@@ -135,10 +135,11 @@ func runSSH(c command, host string, section *SSHConfigFileSection, agt agent.Age
 		config := newSSHClientConfig(user, host, section, agt, m)
 		session, err = config.NewSession(options)
 		if err == nil {
+			log.Debugf("Session established using identity file %s", k)
 			break // Session established, quit trying the next AuthMethod
 		}
 
-		log.Debugf("Failed to establish session with %v - %v", k, err)
+		log.Debugf("Failed to establish session using identity file %s - %v", k, err)
 	}
 
 	if session == nil {
@@ -209,7 +210,6 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:  "identity,i",
-			Value: "id_rsa",
 			Usage: "SSH identity to use for connecting to the host",
 		},
 		cli.StringSliceFlag{
