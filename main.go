@@ -24,7 +24,7 @@ func preload(context *cli.Context) error {
 	return nil
 }
 
-// hostHosts returns a list of host addresses that are specified on the
+// loadHosts returns a list of host addresses that are specified on the
 // command line and also in a hosts file separated by new lines.
 func loadHosts(context *cli.Context) ([]string, error) {
 	hosts := []string(context.GlobalStringSlice("host"))
@@ -36,10 +36,10 @@ func loadHosts(context *cli.Context) ([]string, error) {
 		defer f.Close()
 		s := bufio.NewScanner(f)
 		for s.Scan() {
-			if err := s.Err(); err != nil {
-				return nil, err
-			}
 			hosts = append(hosts, s.Text())
+		}
+		if err := s.Err(); err != nil {
+			return nil, err
 		}
 	}
 	return hosts, nil
