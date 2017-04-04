@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
+	"os/user"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -47,15 +50,21 @@ func parseSSHConfigFileSection(content string) *SSHConfigFileSection {
 }
 
 // parseSSHConfigFile parses the ~/.ssh/config file and build a list of section
-func parseSSHConfigFile(path string) (map[string]*SSHConfigFileSection, error) {
+func parseSSHConfigFile() (map[string]*SSHConfigFileSection, error) {
 
 	sections := make(map[string]*SSHConfigFileSection)
 
-	log.Debugf("parsing ssh config file: %s", path)
-	content, err := ioutil.ReadFile(path)
+	user, err := user.Current()
+	if err != nil {
+		return sections, err
+	}
+	conf := filepath.Join(user.HomeDir, ".ssh", "config")
+
+	log.Debugf("parsing ssh config file: %s", conf)
+	content, err := ioutil.ReadFile(conf)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Debugf("cannot find ssh config file: %s", path)
+			log.Debugf("cannot find ssh config file: %s", conf)
 			return sections, nil
 		}
 		return nil, err
