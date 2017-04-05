@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -59,7 +58,7 @@ func multiplexAction(context *cli.Context) error {
 		return err
 	}
 
-	sections, err := parseSSHConfigFile(filepath.Join(os.Getenv("HOME"), ".ssh", "config"))
+	sections, err := parseSSHConfigFile()
 	if err != nil {
 		return err
 	}
