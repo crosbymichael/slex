@@ -128,17 +128,26 @@ func runSSH(c command, host string, section *SSHConfigFileSection, agt agent.Age
 
 	// Try using each available AuthMethod to establish SSH session
 	var (
+		config  *sshClientConfig
 		session *sshSession
 		err     error
 	)
 	for k, m := range methods {
-		config := newSSHClientConfig(user, host, section, agt, m)
-		session, err = config.NewSession(options)
-		if err == nil {
-			break // Session established, quit trying the next AuthMethod
+		config, err = newSSHClientConfig(user, host, section, agt, m, options)
+		if err != nil {
+			log.Debugf("Failed to parse SSH config - %v", err)
+			continue
 		}
 
-		log.Debugf("Failed to establish session with %v - %v", k, err)
+		session, err = config.NewSession(options)
+		if err != nil {
+			log.Debugf("Failed to establish session with %v - %v", k, err)
+			continue
+		}
+
+		if session != nil {
+			break // Session established, quit trying the next AuthMethod
+		}
 	}
 
 	if session == nil {
