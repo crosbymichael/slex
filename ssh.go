@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	log "github.com/Sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/terminal"
@@ -55,10 +56,8 @@ func updateFromSSHConfigFile(section *SSHConfigFileSection, host, user *string, 
 	}
 
 	if section.IdentityFile != "" {
-		if identity, err := resolveIdentity(section.IdentityFile); err == nil {
-			if m, err := newSSHPublicKeyAuthMethod(*user, identity); err == nil {
-				(*methods)[identity] = m
-			}
+		if m, err := newSSHPublicKeyAuthMethod(section.IdentityFile); err == nil {
+			(*methods)[section.IdentityFile] = m
 		}
 	}
 }
@@ -133,12 +132,22 @@ func newAgent() (agent.Agent, error) {
 	return agent.NewClient(conn), nil
 }
 
-// defaultAuthMethods initializes all the available SSH authentication method.
-func defaultAuthMethods(user, identity string, agt agent.Agent) map[string]ssh.AuthMethod {
+// defaultAuthMethods initializes all the available SSH authentication methods.
+// By default, it uses ~/.ssh/id_dsa, ~/.ssh/id_ecdsa, ~/.ssh/id_ed25519,
+// and ~/.ssh/id_rsa for authentication.
+func defaultAuthMethods(identityFiles []string, agt agent.Agent) map[string]ssh.AuthMethod {
 	methods := make(map[string]ssh.AuthMethod)
 
-	if m, err := newSSHPublicKeyAuthMethod(user, identity); err == nil {
-		methods[identity] = m
+	if len(identityFiles) == 0 {
+		u, err := user.Current()
+		if err == nil {
+			identityFiles = []string{
+				filepath.Join(u.HomeDir, ".ssh", "id_dsa"),
+				filepath.Join(u.HomeDir, ".ssh", "id_ecdsa"),
+				filepath.Join(u.HomeDir, ".ssh", "id_ed25519"),
+				filepath.Join(u.HomeDir, ".ssh", "id_rsa"),
+			}
+		}
 	}
 
 	if agt != nil {
@@ -147,10 +156,18 @@ func defaultAuthMethods(user, identity string, agt agent.Agent) map[string]ssh.A
 		}
 	}
 
+	for _, i := range identityFiles {
+		if m, err := newSSHPublicKeyAuthMethod(i); err == nil {
+			methods[i] = m
+		} else {
+			log.Debugf("Failed to load identity file %s", i)
+		}
+	}
+
 	return methods
 }
 
-// newSSHPublicKeyAuthMethod creates a new SSH authentication method using SSH agent
+// newSSHAgentAuthMethod creates a new SSH authentication method using SSH agent
 func newSSHAgentAuthMethod(agt agent.Agent) (ssh.AuthMethod, error) {
 	signers, err := agt.Signers()
 	if err != nil {
@@ -161,8 +178,8 @@ func newSSHAgentAuthMethod(agt agent.Agent) (ssh.AuthMethod, error) {
 }
 
 // newSSHPublicKeyAuthMethod creates a new SSH authentication method using public/private key
-func newSSHPublicKeyAuthMethod(userName, identity string) (ssh.AuthMethod, error) {
-	contents, err := ioutil.ReadFile(identity)
+func newSSHPublicKeyAuthMethod(identityFile string) (ssh.AuthMethod, error) {
+	contents, err := ioutil.ReadFile(identityFile)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +187,7 @@ func newSSHPublicKeyAuthMethod(userName, identity string) (ssh.AuthMethod, error
 	// handle plain and encrypted private key file
 	block, _ := pem.Decode(contents)
 	if block == nil {
-		return nil, fmt.Errorf("cannot decode private key file %s", identity)
+		return nil, fmt.Errorf("cannot decode identity file %s", identityFile)
 	}
 
 	var signer ssh.Signer
@@ -214,17 +231,4 @@ func newSSHPublicKeyAuthMethod(userName, identity string) (ssh.AuthMethod, error
 	}
 
 	return ssh.PublicKeys(signer), nil
-}
-
-// resolveIdentity returns the realpath of the private key file.
-func resolveIdentity(identity string) (string, error) {
-	if filepath.Dir(identity) != "." {
-		return identity, nil
-	}
-
-	u, err := user.Current()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(u.HomeDir, ".ssh", identity), nil
 }

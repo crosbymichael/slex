@@ -37,8 +37,7 @@ GLOBAL OPTIONS:
    --host value                SSH host address
    --hosts value               file containing host addresses separated by a new line
    --user value, -u value      user to execute the command as (default: "root")
-   --identity value, -i value  SSH identity to use for connecting to the host (default: "id_r
-sa")
+   --identity value, -i value  SSH identity to use for connecting to the host
    --option value, -o value    SSH client option
    --agent, -A                 Forward authentication request to the ssh agent
    --env value, -e value       set environment variables for SSH command
