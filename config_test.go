@@ -72,12 +72,12 @@ func TestParseSSHConfigFile(t *testing.T) {
 			t.Errorf("Some sections are not parsed - content: %q, expected: %q, output: %q.", content, exp, out)
 		}
 
-		for k, v := range exp {
+		for k, e := range exp {
 			o, ok := out[k]
 			if !ok {
 				t.Errorf("Section is missing - content: %q, expected: '%s', output: '%q'.", content, k, o)
-			} else if o != v {
-				t.Errorf("Could not parse section - content: %q, expected: '%s: %q', output: '%s: %q'.", content, k, v, k, o)
+			} else if o != e {
+				t.Errorf("Could not parse section - content: %q, expected: '%s: %q', output: '%s: %q'.", content, k, e, k, o)
 			}
 		}
 	}
@@ -136,6 +136,27 @@ Host bitbucket.com
 			Host: "bitbucket.com",
 			Port: "22",
 			User: "bitbucket",
+		}
+		out, _ := ParseSSHConfigFile(f.Name())
+
+		verify(in, exp, out)
+	}
+
+	// Test options file with blank sections
+	{
+		in := `
+Host github.com
+Host bitbucket.com
+`
+		ioutil.WriteFile(f.Name(), []byte(in), 0644)
+		exp := map[string]SSHClientOptions{}
+		exp["github.com"] = SSHClientOptions{
+			Host: "github.com",
+			Port: "22",
+		}
+		exp["bitbucket.com"] = SSHClientOptions{
+			Host: "bitbucket.com",
+			Port: "22",
 		}
 		out, _ := ParseSSHConfigFile(f.Name())
 
