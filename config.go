@@ -3,8 +3,6 @@ package main
 import (
 	"io/ioutil"
 	"os"
-	"os/user"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -23,22 +21,15 @@ type SSHClientOptions struct {
 	User         string
 }
 
-// ParseSSHConfigFile parses the ~/.ssh/config file and build a list of sections.
-func ParseSSHConfigFile() (map[string]SSHClientOptions, error) {
+// ParseSSHConfigFile parses the file on the given file path and build a list of sections of SSH client options.
+func ParseSSHConfigFile(path string) (map[string]SSHClientOptions, error) {
 	sections := make(map[string]SSHClientOptions)
 
-	// Read config file from default location ~/.ssh/config:
-	user, err := user.Current()
-	if err != nil {
-		return sections, err
-	}
-	conf := filepath.Join(user.HomeDir, ".ssh", "config")
-
-	log.Debugf("parsing ssh config file: %s", conf)
-	content, err := ioutil.ReadFile(conf)
+	log.Debugf("Parsing ssh config file: %s", path)
+	content, err := ioutil.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Debugf("cannot find ssh config file: %s", conf)
+			log.Debugf("cannot find ssh config file: %s", path)
 			return sections, nil
 		}
 		return nil, err
@@ -103,6 +94,6 @@ func ParseOptions(plainOpts []string) SSHClientOptions {
 		}
 	}
 
-	log.Debugf("parsed SSH options: %v", options)
+	log.Debugf("Parsed SSH options: %v", options)
 	return options
 }
