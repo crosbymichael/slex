@@ -47,6 +47,8 @@ GLOBAL OPTIONS:
 
 ```
 
+For the list of supported SSH client option, see `SSHClientOptions` on [config.go](https://github.com/crosbymichael/slex/blob/master/config.go)
+
 ### Get the uptime for all servers
 ```bash
 slex --host 192.168.1.3 --host 192.168.1.4 uptime
