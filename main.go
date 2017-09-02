@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/user"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -58,7 +60,12 @@ func multiplexAction(context *cli.Context) error {
 		return err
 	}
 
-	sections, err := ParseSSHConfigFile()
+	// Parse OpenSSH client config file at ~/.ssh/config:
+	user, err := user.Current()
+	if err != nil {
+		return err
+	}
+	sections, err := ParseSSHConfigFile(filepath.Join(user.HomeDir, ".ssh", "config"))
 	if err != nil {
 		return err
 	}
@@ -88,13 +95,13 @@ func multiplexAction(context *cli.Context) error {
 
 	quiet := context.GlobalBool("quiet")
 	group := &sync.WaitGroup{}
-	user := c.User
+	usr := c.User
 	for _, host := range hosts {
 		group.Add(1)
 
 		// FIXME: ssh config 'Host' is a pattern to match against with 'host' but not exact match.
 		configFileOptions := sections[host]
-		go executeCommand(group, c, user, host, agt, methods, configFileOptions, cliOptions, quiet)
+		go executeCommand(group, c, usr, host, agt, methods, configFileOptions, cliOptions, quiet)
 	}
 	group.Wait()
 
