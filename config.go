@@ -11,20 +11,23 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
-type SSHConfigFileSection struct {
-	Host         string
+// SSHClientOptions holds the client options for establishing SSH connection.
+// See 'man 5 ssh_config' for the option details.
+type SSHClientOptions struct {
 	ForwardAgent string
-	User         string
+	Host         string
 	HostName     string
-	Port         string
 	IdentityFile string
+	Port         string
+	ProxyCommand string
+	User         string
 }
 
-// parseSSHConfigFile parses the ~/.ssh/config file and build a list of section
-func parseSSHConfigFile() (map[string]*SSHConfigFileSection, error) {
+// ParseSSHConfigFile parses the ~/.ssh/config file and build a list of sections.
+func ParseSSHConfigFile() (map[string]SSHClientOptions, error) {
+	sections := make(map[string]SSHClientOptions)
 
-	sections := make(map[string]*SSHConfigFileSection)
-
+	// Read config file from default location ~/.ssh/config:
 	user, err := user.Current()
 	if err != nil {
 		return sections, err
@@ -40,50 +43,64 @@ func parseSSHConfigFile() (map[string]*SSHConfigFileSection, error) {
 		}
 		return nil, err
 	}
+
+	// Read lines in reverse order and parse option for each Host section:
 	lines := strings.Split(string(content), "\n")
-	current := &SSHConfigFileSection{}
-	for _, line := range lines {
-		parts := strings.SplitN(strings.TrimSpace(line), " ", 2)
-		if len(parts) != 2 {
+	hostExpr := regexp.MustCompile("\\s*Host\\s*=?\\s*(.+)")
+
+	end := len(lines) - 1
+	for i := end; i >= 0; i-- {
+		text := lines[i]
+
+		// Skip comment lines:
+		if strings.HasPrefix(text, "#") {
 			continue
 		}
-		key := strings.ToLower(strings.TrimSpace(parts[0]))
-		val := strings.TrimSpace(parts[1])
-		if key == "host" {
-			if current.Host != "" {
-				sections[current.Host] = current
-			}
-			current = &SSHConfigFileSection{Host: val}
-		} else if key == "hostname" {
-			current.HostName = val
-		} else if key == "user" {
-			current.User = val
-		} else if key == "port" {
-			current.Port = val
-		} else if key == "forwardagent" {
-			current.ForwardAgent = val
-		}
-	}
 
-	// add last host to map
-	if current.Host != "" {
-		sections[current.Host] = current
+		// When 'Host' option is found, parse the options of from current line to end line:
+		m := hostExpr.FindStringSubmatch(text)
+		if len(m) == 2 {
+			host := m[1]
+			sections[host] = ParseOptions(lines[i:end])
+
+			end = i - 1 // The next line will be the end of the next section as we're doing reverse iteration.
+		}
 	}
 
 	return sections, nil
 }
 
-// ParseOptions converts a list of OpenSSH client options to key-value pairs.
-// Each option in the list is a keyword-argument pair which is
+// ParseOptions converts a list of OpenSSH client options to SSHClientOptions.
+// Each option in the given list is a keyword-argument pair which is
 // either separated by whitespace or optional whitespace and exactly one '='.
-// For the full list of options, see man 5 ssh_config.
-func ParseOptions(plainOpts []string) map[string]string {
-	optionExpr := regexp.MustCompile("(\\w+)\\s*=?\\s*(.+)")
-	options := make(map[string]string)
+func ParseOptions(plainOpts []string) SSHClientOptions {
+	optionExpr := regexp.MustCompile("\\s*(\\w+)\\s*=?\\s*(.+)")
 
+	options := SSHClientOptions{
+		Host: "*",  // Set Host pattern to "*" as default.
+		Port: "22", // Set Port to "22" as default.
+	}
 	for _, i := range plainOpts {
 		m := optionExpr.FindStringSubmatch(i)
-		options[m[1]] = m[2]
+		key := m[1]
+		value := m[2]
+
+		switch strings.ToLower(key) {
+		case "host":
+			options.Host = value
+		case "hostname":
+			options.HostName = value
+		case "user":
+			options.User = value
+		case "port":
+			options.Port = value
+		case "forwardagent":
+			options.ForwardAgent = value
+		case "identityfile":
+			options.IdentityFile = value
+		case "proxycommand":
+			options.ProxyCommand = value
+		}
 	}
 
 	log.Debugf("parsed SSH options: %v", options)

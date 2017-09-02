@@ -32,8 +32,7 @@ func (s *sshSession) Close() {
 	s.conn.Close()
 }
 
-// sshClientConfig stores the configuration
-// and the ssh agent to forward authentication requests
+// sshClientConfig stores the configuration and the ssh agent to forward authentication requests
 type sshClientConfig struct {
 	// agent is the connection to the ssh agent
 	agent agent.Agent
@@ -44,26 +43,32 @@ type sshClientConfig struct {
 	*ssh.ClientConfig
 }
 
-// updateFromSSHConfigFile updates SSH client parameters
-// from the ~/.ssh/config if there is a matching section.
-func updateFromSSHConfigFile(section *SSHConfigFileSection, host, user *string, methods *map[string]ssh.AuthMethod) {
-	if section.User != "" {
-		*user = section.User
+// getEffectiveClientOptions return the merged copy of the given options from SSH client config file and CLI.
+// Note, 'User' and 'IdentityFile' SSH client options passed from '--option' are ignored, user should use '--user' and '--identity' flag accordingly.
+func getEffectiveClientOptions(configFileOptions, cliOptions SSHClientOptions) SSHClientOptions {
+	options := configFileOptions // configFileOptions is passed by value, it is safe to modify and return the copy.
+
+	if cliOptions.ForwardAgent != "" {
+		options.ForwardAgent = cliOptions.ForwardAgent
 	}
 
-	if section.HostName != "" && section.Port != "" {
-		*host = net.JoinHostPort(section.HostName, section.Port)
+	if cliOptions.HostName != "" {
+		options.HostName = cliOptions.HostName
 	}
 
-	if section.IdentityFile != "" {
-		if m, err := newSSHPublicKeyAuthMethod(section.IdentityFile); err == nil {
-			(*methods)[section.IdentityFile] = m
-		}
+	if cliOptions.Port != "" {
+		options.Port = cliOptions.Port
 	}
+
+	if cliOptions.ProxyCommand != "" {
+		options.ProxyCommand = cliOptions.ProxyCommand
+	}
+
+	return options
 }
 
 // newSSHClientConfig initializes per-host SSH configuration.
-func newSSHClientConfig(user, host string, section *SSHConfigFileSection, agt agent.Agent, method ssh.AuthMethod) *sshClientConfig {
+func newSSHClientConfig(user, host string, agt agent.Agent, method ssh.AuthMethod) *sshClientConfig {
 	config := &ssh.ClientConfig{
 		User: user,
 		Auth: []ssh.AuthMethod{method},
@@ -77,14 +82,14 @@ func newSSHClientConfig(user, host string, section *SSHConfigFileSection, agt ag
 
 // NewSession creates a new ssh session with the host.
 // It forwards authentication to the agent when it's configured.
-func (s *sshClientConfig) NewSession(options map[string]string) (*sshSession, error) {
+func (s *sshClientConfig) NewSession(options SSHClientOptions) (*sshSession, error) {
 	var (
 		conn *ssh.Client
 		err  error
 	)
 
-	if proxyCmd, ok := options["ProxyCommand"]; ok {
-		cmdConn, err := NewProxyCmdConn(s, proxyCmd)
+	if options.ProxyCommand != "" {
+		cmdConn, err := NewProxyCmdConn(s, options.ProxyCommand)
 		if err != nil {
 			return nil, err
 		}
@@ -92,6 +97,7 @@ func (s *sshClientConfig) NewSession(options map[string]string) (*sshSession, er
 		if err != nil {
 			return nil, err
 		}
+
 		conn = ssh.NewClient(c, chans, reqs)
 	} else {
 		conn, err = ssh.Dial("tcp", s.host, s.ClientConfig)
