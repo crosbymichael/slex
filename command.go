@@ -7,7 +7,7 @@ import (
 
 	"strings"
 
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
 )
 
 // newCommand returns a command populated from the context
