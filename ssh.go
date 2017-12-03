@@ -72,6 +72,9 @@ func newSSHClientConfig(user, host string, agt agent.Agent, method ssh.AuthMetho
 	config := &ssh.ClientConfig{
 		User: user,
 		Auth: []ssh.AuthMethod{method},
+		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			return nil
+		},
 	}
 	return &sshClientConfig{
 		agent:        agt,
