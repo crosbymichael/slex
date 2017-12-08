@@ -37,7 +37,7 @@ func ParseSSHConfigFile(path string) (map[string]SSHClientOptions, error) {
 
 	// Read lines in reverse order and parse option for each Host section:
 	lines := strings.Split(string(content), "\n")
-	hostExpr := regexp.MustCompile("\\s*Host\\s*(=?)\\s*(.+)")
+	hostExpr := regexp.MustCompile("\\s*Host\\b\\s*=?\\s*(.+)")
 
 	end := len(lines)
 	for i := end - 1; i >= 0; i-- {
@@ -50,20 +50,8 @@ func ParseSSHConfigFile(path string) (map[string]SSHClientOptions, error) {
 
 		// When 'Host' option is found, parse the options of from current line to end line:
 		m := hostExpr.FindStringSubmatch(text)
-		if len(m) == 3 {
-			sep := m[1]
-			if sep == "" {
-				sep = " "
-			}
-
-			key := strings.SplitN(m[0], sep, 2)
-			keyStr := strings.TrimSpace(key[0])
-
-			if keyStr != "Host" {
-				continue
-			}
-
-			host := m[2]
+		if len(m) == 2 {
+			host := m[1]
 			sections[host] = ParseOptions(lines[i:end])
 
 			end = i // This line will be the end of the next section as we're doing reverse iteration.
