@@ -70,11 +70,9 @@ func getEffectiveClientOptions(configFileOptions, cliOptions SSHClientOptions) S
 // newSSHClientConfig initializes per-host SSH configuration.
 func newSSHClientConfig(user, host string, agt agent.Agent, method ssh.AuthMethod) *sshClientConfig {
 	config := &ssh.ClientConfig{
-		User: user,
-		Auth: []ssh.AuthMethod{method},
-		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-			return nil
-		},
+		User:            user,
+		Auth:            []ssh.AuthMethod{method},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 	return &sshClientConfig{
 		agent:        agt,
