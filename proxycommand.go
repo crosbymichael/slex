@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	shlex "github.com/flynn/go-shlex"
+	log "github.com/sirupsen/logrus"
 )
 
 // ProxyCmdConn is a Conn for talking to the underlying ProxyCommand.
