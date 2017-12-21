@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/mattn/go-colorable"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 	"golang.org/x/crypto/ssh"
@@ -167,7 +168,7 @@ func runSSH(c command, user, host string, agt agent.Agent, methods map[string]ss
 	}
 
 	if !quiet {
-		w := newBufCloser(os.Stdout)
+		w := newBufCloser(colorable.NewColorableStdout())
 		defer w.Close()
 		session.Stderr, session.Stdout = w, w
 	}
