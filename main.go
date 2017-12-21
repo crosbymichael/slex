@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
