@@ -12,7 +12,7 @@ configuration files if you do not want to.
 To build `slex` you must have a working Go install then you can run:
 
 ```bash
-go get -d github.com/crosbymichael/slex
+go get -u github.com/crosbymichael/slex
 ```
 
 ```bash
