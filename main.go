@@ -63,6 +63,7 @@ func multiplexAction(context *cli.Context) error {
 	}
 
 	concurrent := context.GlobalInt("concurrency")
+	lines := context.GlobalInt("lines")
 
 	// Parse OpenSSH client config file at ~/.ssh/config:
 	user, err := user.Current()
@@ -115,7 +116,7 @@ func multiplexAction(context *cli.Context) error {
 			host:   host,
 			config: sections[host],
 			signal: signal,
-			//lines:  make([]string, 1),
+			state:  pending,
 		})
 	}
 
@@ -127,15 +128,7 @@ func multiplexAction(context *cli.Context) error {
 		for range signal {
 			w.Flush()
 			for _, i := range jobs {
-				var data string
-				status := green
-				if i.err != nil {
-					status = red
-					data = i.err.Error()
-				} else {
-					data = i.read(5)
-				}
-				fmt.Fprintf(w, lineformat, status, underline, i.host, reset, data)
+				fmt.Fprintf(w, lineformat, formatHostLine(i), i.read(lines))
 			}
 			w.Flush()
 		}
@@ -155,6 +148,39 @@ func multiplexAction(context *cli.Context) error {
 	return nil
 }
 
+func getState(i int) string {
+	switch i {
+	case pending:
+		return "PENDING"
+	case running:
+		return "RUNNING"
+	case finished:
+		return "FINISHED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func formatHostLine(j *job) string {
+	var (
+		status   = green
+		statemsg = ""
+	)
+	if j.err != nil {
+		status = red
+		statemsg = fmt.Sprintf(": ERROR %s", j.err)
+	} else {
+		statemsg = fmt.Sprintf(": %s", getState(j.state))
+	}
+	return fmt.Sprintf("%s%s%s%s%s",
+		status,
+		underline,
+		j.host,
+		statemsg,
+		reset,
+	)
+}
+
 const (
 	escape    = "\x1b"
 	reset     = escape + "[0m"
@@ -162,7 +188,13 @@ const (
 	green     = escape + "[32m"
 	underline = escape + "[4m"
 )
-const lineformat = "%s%s%s%s\n%s\n"
+const lineformat = "%s\n%s\n"
+
+const (
+	pending = iota + 1
+	running
+	finished
+)
 
 type job struct {
 	host   string
@@ -170,6 +202,7 @@ type job struct {
 	signal chan struct{}
 	lines  []string
 	err    error
+	state  int
 }
 
 func (i *job) read(count int) string {
@@ -184,13 +217,19 @@ func executeCommand(wg *sync.WaitGroup, jobs chan *job, c command, user string, 
 	defer wg.Done()
 
 	for job := range jobs {
+		job.state = running
+		job.signal <- struct{}{}
+
 		var err error
 		if job.host, err = cleanHost(job.host); err != nil {
 			job.err = err
+			continue
 		}
 		if err = runSSH(job, c, user, agt, methods, cliOptions, quiet); err != nil {
 			job.err = err
 		}
+		job.state = finished
+		job.signal <- struct{}{}
 	}
 }
 
@@ -320,6 +359,11 @@ func main() {
 			Name:  "concurrency,c",
 			Usage: "set the concurrent worker limit",
 			Value: 10,
+		},
+		cli.IntFlag{
+			Name:  "lines,l",
+			Usage: "number of lines to display on screen at once",
+			Value: 5,
 		},
 	}
 	app.Action = multiplexAction
