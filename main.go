@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/containerd/containerd/pkg/progress"
 	"github.com/mattn/go-colorable"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -97,65 +98,113 @@ func multiplexAction(context *cli.Context) error {
 	cliOptions := ParseOptions(plainOptions)
 
 	quiet := context.GlobalBool("quiet")
-	group := &sync.WaitGroup{}
+	wg := &sync.WaitGroup{}
 	usr := c.User
-	jobs := make(chan *job, 64)
 
+	work := make(chan *job, 64)
+	// add workers for concurrency level
 	for i := 0; i < concurrent; i++ {
-		group.Add(1)
-
-		go executeCommand(group, jobs, c, usr, agt, methods, cliOptions, quiet)
+		wg.Add(1)
+		go executeCommand(wg, work, c, usr, agt, methods, cliOptions, quiet)
 	}
+
+	var jobs []*job
+	signal := make(chan struct{}, len(jobs))
 	for _, host := range hosts {
-		jobs <- &job{
+		jobs = append(jobs, &job{
 			host:   host,
 			config: sections[host],
-		}
+			signal: signal,
+			//lines:  make([]string, 1),
+		})
 	}
-	close(jobs)
-	group.Wait()
+
+	w := progress.NewWriter(colorable.NewColorableStdout())
+	var wwg sync.WaitGroup
+	wwg.Add(1)
+	go func() {
+		defer wwg.Done()
+		for range signal {
+			w.Flush()
+			for _, i := range jobs {
+				var data string
+				status := green
+				if i.err != nil {
+					status = red
+					data = i.err.Error()
+				} else {
+					data = i.read(5)
+				}
+				fmt.Fprintf(w, lineformat, status, underline, i.host, reset, data)
+			}
+			w.Flush()
+		}
+	}()
+
+	// send work
+	for _, j := range jobs {
+		work <- j
+	}
+	close(work)
+
+	wg.Wait()
+	close(signal)
+	wwg.Wait()
 
 	log.Debugf("finished executing %s on all hosts", c)
 	return nil
 }
 
+const (
+	escape    = "\x1b"
+	reset     = escape + "[0m"
+	red       = escape + "[31m" // nolint: deadcode, varcheck, unused
+	green     = escape + "[32m"
+	underline = escape + "[4m"
+)
+const lineformat = "%s%s%s%s\n%s\n"
+
 type job struct {
 	host   string
 	config SSHClientOptions
+	signal chan struct{}
+	lines  []string
+	err    error
 }
 
-func executeCommand(group *sync.WaitGroup, jobs chan *job, c command, user string, agt agent.Agent, methods map[string]ssh.AuthMethod, cliOptions SSHClientOptions, quiet bool) {
-	defer group.Done()
-	for job := range jobs {
-		var (
-			host              = job.host
-			configFileOptions = job.config
+func (i *job) read(count int) string {
+	l := len(i.lines)
+	from := l - count
+	if from < 0 {
+		return strings.Join(i.lines, "\n")
+	}
+	return strings.Join(i.lines[from:], "\n")
+}
+func executeCommand(wg *sync.WaitGroup, jobs chan *job, c command, user string, agt agent.Agent, methods map[string]ssh.AuthMethod, cliOptions SSHClientOptions, quiet bool) {
+	defer wg.Done()
 
-			err          error
-			originalHost = host
-		)
-		if host, err = cleanHost(host); err != nil {
-			log.WithField("host", originalHost).Error(err)
-			return
+	for job := range jobs {
+		var err error
+		if job.host, err = cleanHost(job.host); err != nil {
+			job.err = err
 		}
-		if err = runSSH(c, user, host, agt, methods, configFileOptions, cliOptions, quiet); err != nil {
-			log.WithField("host", host).Error(err)
-			return
+		if err = runSSH(job, c, user, agt, methods, cliOptions, quiet); err != nil {
+			job.err = err
 		}
 	}
 }
 
 // runSSH executes the given command on the given host.
 // All available SSH authentication methods to the host will be tried.
-func runSSH(c command, user, host string, agt agent.Agent, methods map[string]ssh.AuthMethod, configFileOptions, cliOptions SSHClientOptions, quiet bool) error {
-	options := getEffectiveClientOptions(configFileOptions, cliOptions)
+func runSSH(job *job, c command, user string, agt agent.Agent, methods map[string]ssh.AuthMethod, cliOptions SSHClientOptions, quiet bool) error {
+	options := getEffectiveClientOptions(job.config, cliOptions)
 	log.Debugf("Using SSH client options: %q", options)
 
 	if options.User != "" {
 		user = options.User
 	}
 	if options.HostName != "" {
-		host = net.JoinHostPort(options.HostName, options.Port)
+		job.host = net.JoinHostPort(options.HostName, options.Port)
 	}
 	if options.IdentityFile != "" {
 		if m, err := newSSHPublicKeyAuthMethod(options.IdentityFile); err == nil {
@@ -170,7 +219,7 @@ func runSSH(c command, user, host string, agt agent.Agent, methods map[string]ss
 	)
 
 	for k, m := range methods {
-		config := newSSHClientConfig(user, host, agt, m)
+		config := newSSHClientConfig(user, job.host, agt, m)
 		session, err = config.NewSession(options)
 		if err == nil {
 			log.Debugf("Session established using identity file %s", k)
@@ -185,13 +234,12 @@ func runSSH(c command, user, host string, agt agent.Agent, methods map[string]ss
 	}
 
 	if !quiet {
-		w := newBufCloser(colorable.NewColorableStdout())
-		defer w.Close()
+		w := newWriter(job)
 		session.Stderr, session.Stdout = w, w
 	}
 	defer func() {
 		session.Close()
-		log.Printf("Session complete from %s@%s", user, host)
+		//		log.Printf("Session complete from %s@%s", user, job.host)
 	}()
 
 	for key, value := range c.Env {
@@ -223,7 +271,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "slex"
 	app.Usage = "SSH commands multiplexed"
-	app.Version = "3"
+	app.Version = "4"
 	app.Author = "@crosbymichael"
 	app.Email = "crosbymichael@gmail.com"
 	app.Before = preload

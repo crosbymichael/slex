@@ -3,26 +3,27 @@ package main
 import (
 	"bytes"
 	"io"
+	"time"
 )
 
-func newBufCloser(w io.Writer) io.WriteCloser {
-	return &bufCloser{
-		buffer: bytes.NewBuffer(nil),
-		w:      w,
+func newWriter(j *job) io.Writer {
+	return &writer{
+		j: j,
 	}
 }
 
-// bufCloser buffers all output that is written to it until it's closed.
-type bufCloser struct {
-	buffer *bytes.Buffer
-	w      io.Writer
+// writer buffers all output that is written to it until it's closed.
+type writer struct {
+	j *job
 }
 
-func (w *bufCloser) Write(p []byte) (int, error) {
-	return w.buffer.Write(p)
-}
-
-func (w *bufCloser) Close() error {
-	_, err := w.buffer.WriteTo(w.w)
-	return err
+func (w *writer) Write(p []byte) (int, error) {
+	lines := bytes.Split(p, []byte("\n"))
+	for _, l := range lines {
+		w.j.lines = append(w.j.lines, string(l))
+		w.j.signal <- struct{}{}
+		time.Sleep(50 * time.Millisecond)
+	}
+	//w.j.signal <- struct{}{}
+	return len(p), nil
 }
