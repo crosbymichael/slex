@@ -61,6 +61,8 @@ func multiplexAction(context *cli.Context) error {
 		return err
 	}
 
+	concurrent := context.GlobalInt("concurrency")
+
 	// Parse OpenSSH client config file at ~/.ssh/config:
 	user, err := user.Current()
 	if err != nil {
@@ -97,34 +99,49 @@ func multiplexAction(context *cli.Context) error {
 	quiet := context.GlobalBool("quiet")
 	group := &sync.WaitGroup{}
 	usr := c.User
-	for _, host := range hosts {
+	jobs := make(chan *job, 64)
+
+	for i := 0; i < concurrent; i++ {
 		group.Add(1)
 
-		// FIXME: ssh config 'Host' is a pattern to match against with 'host' but not exact match.
-		configFileOptions := sections[host]
-		go executeCommand(group, c, usr, host, agt, methods, configFileOptions, cliOptions, quiet)
+		go executeCommand(group, jobs, c, usr, agt, methods, cliOptions, quiet)
 	}
+	for _, host := range hosts {
+		jobs <- &job{
+			host:   host,
+			config: sections[host],
+		}
+	}
+	close(jobs)
 	group.Wait()
 
 	log.Debugf("finished executing %s on all hosts", c)
 	return nil
 }
 
-func executeCommand(group *sync.WaitGroup, c command, user, host string, agt agent.Agent, methods map[string]ssh.AuthMethod, configFileOptions, cliOptions SSHClientOptions, quiet bool) {
+type job struct {
+	host   string
+	config SSHClientOptions
+}
+
+func executeCommand(group *sync.WaitGroup, jobs chan *job, c command, user string, agt agent.Agent, methods map[string]ssh.AuthMethod, cliOptions SSHClientOptions, quiet bool) {
 	defer group.Done()
+	for job := range jobs {
+		var (
+			host              = job.host
+			configFileOptions = job.config
 
-	var (
-		err          error
-		originalHost = host
-	)
-	if host, err = cleanHost(host); err != nil {
-		log.WithField("host", originalHost).Error(err)
-		return
-	}
-
-	if err = runSSH(c, user, host, agt, methods, configFileOptions, cliOptions, quiet); err != nil {
-		log.WithField("host", host).Error(err)
-		return
+			err          error
+			originalHost = host
+		)
+		if host, err = cleanHost(host); err != nil {
+			log.WithField("host", originalHost).Error(err)
+			return
+		}
+		if err = runSSH(c, user, host, agt, methods, configFileOptions, cliOptions, quiet); err != nil {
+			log.WithField("host", host).Error(err)
+			return
+		}
 	}
 }
 
@@ -206,7 +223,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "slex"
 	app.Usage = "SSH commands multiplexed"
-	app.Version = "2"
+	app.Version = "3"
 	app.Author = "@crosbymichael"
 	app.Email = "crosbymichael@gmail.com"
 	app.Before = preload
@@ -250,6 +267,11 @@ func main() {
 		cli.BoolFlag{
 			Name:  "quiet,q",
 			Usage: "disable output from the ssh command",
+		},
+		cli.IntFlag{
+			Name:  "concurrency,c",
+			Usage: "set the concurrent worker limit",
+			Value: 10,
 		},
 	}
 	app.Action = multiplexAction
